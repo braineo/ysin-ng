@@ -92,6 +92,27 @@ export const SUB_ROLL: Record<SubKey, number> = {
 }
 export const SUB_KEYS = Object.keys(SUB_ROLL) as SubKey[]
 
+/** Level keys in order: "80" = before ascending at the level cap, "80+" = after. */
+export const LEVEL_KEYS = [
+  '1',
+  '20',
+  '20+',
+  '40',
+  '40+',
+  '50',
+  '50+',
+  '60',
+  '60+',
+  '70',
+  '70+',
+  '80',
+  '80+',
+  '90',
+  '95',
+  '100',
+]
+export const WEAPON_LEVEL_KEYS = LEVEL_KEYS.slice(0, LEVEL_KEYS.indexOf('90') + 1)
+
 export const ATTACK_KEYS: AttackKey[] = ['normal', 'charged', 'plunge', 'skill', 'burst']
 export const ELEMENTS: Element[] = [
   'pyro',

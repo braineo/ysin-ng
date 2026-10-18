@@ -39,11 +39,29 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <header className="border-b bg-card/80 backdrop-blur sticky top-0 z-20">
-          <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
             <Link to="/" className="flex items-baseline gap-2 no-underline">
               <span className="font-display text-xl font-bold text-primary">{t('appName')}</span>
               <span className="hidden text-sm text-muted-foreground sm:inline">{t('tagline')}</span>
             </Link>
+            <nav className="flex items-center gap-1 text-sm" aria-label="Main">
+              {(
+                [
+                  ['/', 'characters'],
+                  ['/builds', 'myBuilds'],
+                  ['/import', 'import'],
+                ] as const
+              ).map(([to, key]) => (
+                <Link
+                  key={to}
+                  to={to}
+                  activeOptions={{ exact: to === '/', includeSearch: false }}
+                  className="rounded-md px-2.5 py-1 text-muted-foreground hover:text-foreground data-[status=active]:font-semibold data-[status=active]:text-foreground"
+                >
+                  {t(key)}
+                </Link>
+              ))}
+            </nav>
             <nav className="ml-auto flex items-center gap-1 text-sm" aria-label="Language">
               {(['en', 'zh'] as const).map((l) => (
                 <Link

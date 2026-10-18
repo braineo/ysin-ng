@@ -10,11 +10,29 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BuildsRouteImport } from './routes/builds'
+import { Route as CompareRouteImport } from './routes/compare'
+import { Route as ImportRouteImport } from './routes/import'
 import { Route as CSlugRouteImport } from './routes/c.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BuildsRoute = BuildsRouteImport.update({
+  id: '/builds',
+  path: '/builds',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompareRoute = CompareRouteImport.update({
+  id: '/compare',
+  path: '/compare',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImportRoute = ImportRouteImport.update({
+  id: '/import',
+  path: '/import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CSlugRoute = CSlugRouteImport.update({
@@ -25,27 +43,39 @@ const CSlugRoute = CSlugRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/builds': typeof BuildsRoute
+  '/compare': typeof CompareRoute
+  '/import': typeof ImportRoute
   '/c/$slug': typeof CSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/builds': typeof BuildsRoute
+  '/compare': typeof CompareRoute
+  '/import': typeof ImportRoute
   '/c/$slug': typeof CSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/builds': typeof BuildsRoute
+  '/compare': typeof CompareRoute
+  '/import': typeof ImportRoute
   '/c/$slug': typeof CSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/c/$slug'
+  fullPaths: '/' | '/builds' | '/compare' | '/import' | '/c/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/c/$slug'
-  id: '__root__' | '/' | '/c/$slug'
+  to: '/' | '/builds' | '/compare' | '/import' | '/c/$slug'
+  id: '__root__' | '/' | '/builds' | '/compare' | '/import' | '/c/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BuildsRoute: typeof BuildsRoute
+  CompareRoute: typeof CompareRoute
+  ImportRoute: typeof ImportRoute
   CSlugRoute: typeof CSlugRoute
 }
 
@@ -56,6 +86,27 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/builds': {
+      id: '/builds'
+      path: '/builds'
+      fullPath: '/builds'
+      preLoaderRoute: typeof BuildsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compare': {
+      id: '/compare'
+      path: '/compare'
+      fullPath: '/compare'
+      preLoaderRoute: typeof CompareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/import': {
+      id: '/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof ImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/c/$slug': {
@@ -70,6 +121,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BuildsRoute: BuildsRoute,
+  CompareRoute: CompareRoute,
+  ImportRoute: ImportRoute,
   CSlugRoute: CSlugRoute,
 }
 export const routeTree = rootRouteImport

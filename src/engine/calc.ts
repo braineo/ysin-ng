@@ -41,7 +41,13 @@ export type Build = {
   enemyLevel: number
   enemyRes: number
   custom: Buff[]
+  /** id of the result row the optimizer and comparison target (default: highest average damage) */
+  focus?: string
+  /** exact main-stat values from an imported build; default is the 5★ +20 value */
+  mainValues?: Partial<Record<ArtifactSlot, number>>
 }
+
+export type ArtifactSlot = 'flower' | 'plume' | 'sands' | 'goblet' | 'circlet'
 
 export type Panel = {
   base: { hp: number; atk: number; def: number }
@@ -60,10 +66,15 @@ export type Panel = {
 const sum = (buffs: Buff[], key: BuffKey, on?: string) =>
   buffs.reduce((s, b) => (b.key === key && b.on === on ? s + b.value : s), 0)
 
-function mainBuff(key: MainKey, element: Element, source: string): Buff {
-  if (key === 'dmg') return { key: 'dmg', value: MAIN_STAT.dmg, on: element, source }
-  if (key === 'physical') return { key: 'dmg', value: MAIN_STAT.physical, on: 'physical', source }
-  return { key, value: MAIN_STAT[key], source }
+function mainBuff(
+  key: MainKey,
+  element: Element,
+  source: string,
+  value: number = MAIN_STAT[key],
+): Buff {
+  if (key === 'dmg') return { key: 'dmg', value, on: element, source }
+  if (key === 'physical') return { key: 'dmg', value, on: 'physical', source }
+  return { key, value, source }
 }
 
 /** Ascension / weapon secondary stat. genshin-db gives EM as a number and the rest as fractions. */
@@ -151,11 +162,11 @@ export function collectBuffs(
   const st = char.stats[build.level] ?? char.stats['90']
   const buffs: Buff[] = [
     ...specBuff(char.ascensionStat, st.spec, char.ascensionElement ?? char.element, 'Ascension'),
-    { key: 'hp', value: MAIN_STAT.hp, source: 'Flower' },
-    { key: 'atk', value: MAIN_STAT.atk, source: 'Feather' },
-    mainBuff(build.mains.sands, char.element, 'Sands'),
-    mainBuff(build.mains.goblet, char.element, 'Goblet'),
-    mainBuff(build.mains.circlet, char.element, 'Circlet'),
+    { key: 'hp', value: build.mainValues?.flower ?? MAIN_STAT.hp, source: 'Flower' },
+    { key: 'atk', value: build.mainValues?.plume ?? MAIN_STAT.atk, source: 'Feather' },
+    mainBuff(build.mains.sands, char.element, 'Sands', build.mainValues?.sands),
+    mainBuff(build.mains.goblet, char.element, 'Goblet', build.mainValues?.goblet),
+    mainBuff(build.mains.circlet, char.element, 'Circlet', build.mainValues?.circlet),
     ...SUB_KEYS.filter((k) => build.rolls[k]).map((k): Buff => ({
       key: k,
       value: SUB_ROLL[k] * build.rolls[k],
@@ -225,6 +236,8 @@ export function defMult(charLevel: number, enemyLevel: number, shred: number, ig
 }
 
 export type HitResult = {
+  /** stable across languages: "<talent>.<row>.<variant>" */
+  id: string
   label: string
   attack: AttackKey
   element: Element
@@ -267,7 +280,7 @@ export function calcRows(
 
   for (const t of char.talents) {
     const idx = talentLevel(char, build, t.key) - 1
-    for (const row of t.rows) {
+    for (const [ri, row] of t.rows.entries()) {
       const element = build.infusion && row.element === 'physical' ? char.element : row.element
       row.variants.forEach((v, vi) => {
         let base = 0
@@ -279,6 +292,7 @@ export function calcRows(
         }
         const label = row.variants.length > 1 ? `${row.label} #${vi + 1}` : row.label
         const common = {
+          id: `${t.key}.${ri}.${vi}`,
           talent: t.name,
           label,
           attack: row.attack,
@@ -368,4 +382,14 @@ export function calculate(
     rows: calcRows(char, panel, build),
     transformative: calcTransformative(char, panel, build),
   }
+}
+
+/** The number a build is judged by: its focus row, else its highest-average damage row. */
+export function focusRow(rows: HitResult[], focus?: string) {
+  return (
+    rows.find((r) => r.id === focus) ??
+    rows
+      .filter((r) => r.kind === 'damage')
+      .reduce<HitResult | undefined>((best, r) => (!best || r.avg > best.avg ? r : best), undefined)
+  )
 }

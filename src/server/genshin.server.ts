@@ -1,6 +1,7 @@
 // genshin-db is ~180 MB of JSON: keep it on the server and send only normalized slices to the client.
 import g, { type Language } from 'genshin-db'
 import { parseTwoPc } from '#/engine/sets'
+import { LEVEL_KEYS, WEAPON_LEVEL_KEYS } from '#/engine/tables'
 import { parseTalent } from '#/engine/talents'
 import type {
   ArtifactSetData,
@@ -62,8 +63,10 @@ function prop(type?: string): { stat: StatKey | 'dmg' | null; element?: Element 
 }
 
 /** Ascended stats at each level breakpoint; "90"+ have no further ascension. */
-const LEVELS = [1, 20, 40, 50, 60, 70, 80, 90, 95, 100]
-const ascended = (lv: number) => (lv > 1 && lv < 90 ? '+' : undefined)
+const statsAt = (gdb: Gdb, key: string) =>
+  gdb.stats(Number.parseInt(key), key.endsWith('+') ? '+' : '-')
+/** genshin-db's character CRIT ascension values include the base 5% CR / 50% CD the engine adds itself */
+const BASE_SPEC: Partial<Record<string, number>> = { cr: 0.05, cd: 0.5 }
 
 export const slugOf = (name: string) =>
   name
@@ -87,6 +90,13 @@ const playable = memo(() =>
     g.talents(n, EN),
   ),
 )
+
+/** game avatar id (as used by enka.network) → our slug */
+export const slugById = memo(() => {
+  const map = new Map<number, string>()
+  for (const n of playable('')) map.set((g.characters(n, EN) as Gdb).id, slugOf(n))
+  return map
+})
 
 export const roster = memo((lang: string) =>
   playable('').map((n) => {
@@ -120,9 +130,14 @@ export const character = memo((key: string): CharacterData | null => {
   const asc = prop(en.substatType)
 
   const stats: CharacterData['stats'] = {}
-  for (const lv of LEVELS) {
-    const s = en.stats(lv, ascended(lv))
-    stats[String(lv)] = { hp: s.hp, atk: s.attack, def: s.defense, spec: s.specialized }
+  for (const lv of LEVEL_KEYS) {
+    const s = statsAt(en, lv)
+    stats[lv] = {
+      hp: s.hp,
+      atk: s.attack,
+      def: s.defense,
+      spec: s.specialized - (BASE_SPEC[asc.stat ?? ''] ?? 0),
+    }
   }
   const boostOf = (talentName: string) => {
     for (const c of [3, 5]) if (cEn[`c${c}`]?.description.includes(talentName)) return c
@@ -177,9 +192,9 @@ export const weapons = memo((key: string): WeaponData[] => {
     .toSorted(([a], [b]) => b.rarity - a.rarity || a.name.localeCompare(b.name))
     .map(([w, local]) => {
       const stats: WeaponData['stats'] = {}
-      for (const lv of LEVELS.filter((l) => l <= 90)) {
-        const s = w.stats(lv, ascended(lv))
-        stats[String(lv)] = { atk: s.attack, spec: s.specialized ?? 0 }
+      for (const lv of WEAPON_LEVEL_KEYS) {
+        const s = statsAt(w, lv)
+        stats[lv] = { atk: s.attack, spec: s.specialized ?? 0 }
       }
       return {
         id: w.id,

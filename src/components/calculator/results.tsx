@@ -1,0 +1,284 @@
+import { Star } from 'lucide-react'
+import { ELEMENT_TEXT } from '#/components/game-icon'
+import { Badge } from '#/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '#/components/ui/table'
+import { calculate, focusRow, talentLevel, type Build, type Panel } from '#/engine/calc'
+import { FOUR_PC } from '#/engine/sets'
+import type { ArtifactSetData, CharacterData } from '#/engine/types'
+import { useLang, useT } from '#/lib/i18n'
+import type { GamePanel } from '#/lib/store'
+import { cn } from '#/lib/utils'
+
+export const pct = (v: number) => `${(v * 100).toFixed(1)}%`
+export const useFmt = () =>
+  new Intl.NumberFormat(useLang() === 'zh' ? 'zh-CN' : 'en', { maximumFractionDigits: 0 })
+
+/** Panel stats as comparable numbers, in display order. */
+export function panelStats(p: Panel, element: string): GamePanel & Record<string, number> {
+  const dmg = p.buffs.reduce(
+    (s, b) => (b.key === 'dmg' && (!b.on || b.on === element) ? s + b.value : s),
+    0,
+  )
+  return {
+    hp: p.hp,
+    atk: p.atk,
+    def: p.def,
+    em: p.em,
+    cr: p.cr,
+    cd: p.cd,
+    er: p.er,
+    dmg,
+    heal: p.heal,
+  }
+}
+export const STAT_ROWS = ['hp', 'atk', 'def', 'em', 'cr', 'cd', 'er', 'dmg', 'heal'] as const
+export const isPctStat = (k: string) => k !== 'hp' && k !== 'atk' && k !== 'def' && k !== 'em'
+
+type Props = {
+  char: CharacterData
+  sets: ArtifactSetData[]
+  build: Build
+  result: ReturnType<typeof calculate>
+  game?: GamePanel
+  onFocus: (id: string) => void
+}
+
+export function Results({ char, sets, build, result, game, onFocus }: Props) {
+  const t = useT()
+  const lang = useLang()
+  const fmt = useFmt()
+  const stats = panelStats(result.panel, char.element)
+  const focus = focusRow(result.rows, build.focus)
+  const fourPcSet = build.fourPc ? sets.find((s) => s.id === build.sets[0]) : undefined
+  const label = (k: string) =>
+    k === 'dmg' ? `${t(char.element)} ${t('dmgBonus')}` : k === 'heal' ? t('healBonus') : t(k)
+  const show = (k: string, v: number) => (isPctStat(k) ? pct(v) : fmt.format(v))
+
+  return (
+    <div className="min-w-0 space-y-5">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('stats')}</CardTitle>
+          {game && <p className="text-xs text-muted-foreground">{t('gameHint')}</p>}
+        </CardHeader>
+        <CardContent>
+          {game ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead />
+                  <TableHead className="text-right">{t('calculator')}</TableHead>
+                  <TableHead className="text-right">{t('inGame')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {STAT_ROWS.filter((k) => k !== 'heal').map((k) => {
+                  const off =
+                    Math.abs(stats[k] - game[k]) >
+                    Math.max(Math.abs(game[k]) * 0.005, isPctStat(k) ? 0.001 : 1)
+                  return (
+                    <TableRow key={k}>
+                      <TableCell className="text-muted-foreground">{label(k)}</TableCell>
+                      <TableCell
+                        className={cn(
+                          'text-right tabular-nums',
+                          off && 'font-semibold text-primary',
+                        )}
+                      >
+                        {show(k, stats[k])}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{show(k, game[k])}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+              {STAT_ROWS.map((k) => (
+                <div key={k} className="flex justify-between gap-2 border-b border-dashed pb-1">
+                  <dt className="text-muted-foreground">{label(k)}</dt>
+                  <dd className="font-medium tabular-nums">{show(k, stats[k])}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('damage')}</CardTitle>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-8">
+                  <span className="sr-only">{t('focus')}</span>
+                </TableHead>
+                <TableHead>{t('talents')}</TableHead>
+                <TableHead>{t('formula')}</TableHead>
+                <TableHead className="text-right">{t('nonCrit')}</TableHead>
+                <TableHead className="text-right">{t('crit')}</TableHead>
+                <TableHead className="text-right">{t('average')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {char.talents.map((tal) => {
+                const rows = result.rows.filter((r) => r.id.startsWith(`${tal.key}.`))
+                if (!rows.length) return null
+                return [
+                  <TableRow key={tal.key} className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={6} className="font-semibold">
+                      {tal.name}{' '}
+                      <span className="font-normal text-muted-foreground">
+                        · Lv. {talentLevel(char, build, tal.key)}
+                      </span>
+                    </TableCell>
+                  </TableRow>,
+                  ...rows.map((r) => {
+                    const isFocus = focus?.id === r.id
+                    return (
+                      <TableRow key={r.id} data-state={isFocus ? 'selected' : undefined}>
+                        <TableCell className="px-1">
+                          {r.kind !== 'lunar' && (
+                            <button
+                              type="button"
+                              title={t('focus')}
+                              aria-label={t('focus')}
+                              aria-pressed={isFocus}
+                              onClick={() => onFocus(r.id)}
+                              className="grid size-7 place-items-center rounded text-muted-foreground hover:text-primary aria-pressed:text-primary"
+                            >
+                              <Star className={cn('size-4', isFocus && 'fill-current')} />
+                            </button>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-normal">
+                          <span className={ELEMENT_TEXT[r.element]}>●</span> {r.label}
+                          {r.reaction && (
+                            <Badge variant="outline" className="ml-1.5">
+                              {t(r.reaction)}
+                            </Badge>
+                          )}
+                          {r.kind !== 'damage' && (
+                            <Badge variant="outline" className="ml-1.5">
+                              {t(r.kind === 'lunar' ? 'lunarNote' : r.kind)}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{r.formula}</TableCell>
+                        {r.kind === 'damage' ? (
+                          <>
+                            <TableCell className="text-right tabular-nums">
+                              {fmt.format(r.nonCrit)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {fmt.format(r.crit)}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {fmt.format(r.avg)}
+                            </TableCell>
+                          </>
+                        ) : (
+                          <TableCell colSpan={3} className="text-right font-semibold tabular-nums">
+                            {r.kind === 'lunar' ? '—' : fmt.format(r.avg)}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    )
+                  }),
+                ]
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        {result.transformative.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('transformative')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-1.5 text-sm">
+                {result.transformative.map((r) => (
+                  <div key={r.reaction} className="flex justify-between">
+                    <dt className="text-muted-foreground">{t(r.reaction)}</dt>
+                    <dd className="font-medium tabular-nums">{fmt.format(r.damage)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </CardContent>
+          </Card>
+        )}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('appliedSets')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {result.effects.map((e) => (
+              <p key={`${e.name}${e.pieces}`}>
+                <span className="font-medium">
+                  {e.name} {e.pieces}pc
+                </span>{' '}
+                <span className="text-muted-foreground">
+                  ·{' '}
+                  {e.pieces === 2
+                    ? e.note
+                    : !e.note
+                      ? t('fourPcMissing')
+                      : lang === 'en'
+                        ? e.note
+                        : t('fourPcApplied')}
+                </span>
+              </p>
+            ))}
+            {fourPcSet?.fourPc && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {fourPcSet.fourPc}
+                {!FOUR_PC[fourPcSet.key] && ` — ${t('fourPcMissing')}`}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardContent className="space-y-3 pt-6 text-sm">
+          <TextList title={t('passives')} items={char.passives} />
+          <TextList
+            title={t('constellations')}
+            items={char.constellations.map((c, i) => ({ ...c, name: `C${i + 1} · ${c.name}` }))}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function TextList({ title, items }: { title: string; items: { name: string; text: string }[] }) {
+  return (
+    <details>
+      <summary className="cursor-pointer font-semibold">{title}</summary>
+      <dl className="mt-2 space-y-2">
+        {items.map((it) => (
+          <div key={it.name}>
+            <dt className="font-medium">{it.name}</dt>
+            <dd className="whitespace-pre-line text-muted-foreground">{it.text}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  )
+}

@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { WeaponType } from '#/engine/types'
 import type { Lang } from '#/lib/assets'
+import { importProfile } from './enka.server'
 import { artifactSets, character, roster, weapons } from './genshin.server'
 
 const lang = (l: unknown): Lang => (l === 'zh' ? 'zh' : 'en')
@@ -25,3 +26,10 @@ export const getCalculatorData = createServerFn({ method: 'GET' })
       sets: artifactSets(data.lang),
     }
   })
+
+export const importUid = createServerFn({ method: 'POST' })
+  .validator((d: { uid: string; lang: Lang }) => ({
+    uid: String(d.uid).trim(),
+    lang: lang(d.lang),
+  }))
+  .handler(({ data }) => importProfile(data.uid, data.lang))

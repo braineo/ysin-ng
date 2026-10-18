@@ -49,3 +49,32 @@ export const ELEMENT_BG = {
   dendro: 'bg-dendro',
   physical: 'bg-physical',
 } as const
+
+export function IconLabel({
+  src,
+  fallback,
+  text,
+  stars,
+}: {
+  src: string
+  fallback?: string
+  text: string
+  stars?: number
+}) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <GameIcon src={src} fallback={fallback} alt="" className="size-5 shrink-0" />
+      <span className="truncate">{text}</span>
+      {stars && (
+        <span
+          className={cn(
+            'text-xs',
+            stars === 5 ? 'text-star5' : stars === 4 ? 'text-star4' : 'text-muted-foreground',
+          )}
+        >
+          {stars}★
+        </span>
+      )}
+    </span>
+  )
+}
