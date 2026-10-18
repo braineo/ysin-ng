@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+/* Cool slate neutrals with a gold accent (5★ rarity gold); element colors as semantic tokens. */
+:root {
+  --background: oklch(0.985 0.004 250);
+  --foreground: oklch(0.22 0.02 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 255);
+  --primary: oklch(0.62 0.13 75);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0.008 250);
+  --secondary-foreground: oklch(0.25 0.02 255);
+  --muted: oklch(0.955 0.008 250);
+  --muted-foreground: oklch(0.5 0.02 255);
+  --accent: oklch(0.95 0.03 80);
+  --accent-foreground: oklch(0.3 0.05 70);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.91 0.01 250);
+  --input: oklch(0.91 0.01 250);
+  --ring: oklch(0.62 0.13 75);
+  --radius: 0.5rem;
+  --pyro: oklch(0.63 0.19 35);
+  --hydro: oklch(0.6 0.15 245);
+  --electro: oklch(0.58 0.18 300);
+  --cryo: oklch(0.7 0.11 210);
+  --anemo: oklch(0.68 0.13 170);
+  --geo: oklch(0.7 0.14 80);
+  --dendro: oklch(0.65 0.17 135);
+  --physical: oklch(0.55 0.02 255);
+  --star4: oklch(0.6 0.15 300);
+  --star5: oklch(0.72 0.14 75);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.17 0.015 255);
+    --foreground: oklch(0.94 0.01 250);
+    --card: oklch(0.21 0.017 255);
+    --card-foreground: oklch(0.94 0.01 250);
+    --popover: oklch(0.21 0.017 255);
+    --popover-foreground: oklch(0.94 0.01 250);
+    --primary: oklch(0.78 0.13 80);
+    --primary-foreground: oklch(0.2 0.02 255);
+    --secondary: oklch(0.27 0.02 255);
+    --secondary-foreground: oklch(0.94 0.01 250);
+    --muted: oklch(0.27 0.02 255);
+    --muted-foreground: oklch(0.7 0.02 250);
+    --accent: oklch(0.3 0.04 80);
+    --accent-foreground: oklch(0.92 0.05 85);
+    --border: oklch(0.3 0.02 255);
+    --input: oklch(0.32 0.02 255);
+    --ring: oklch(0.78 0.13 80);
+    --pyro: oklch(0.72 0.17 40);
+    --hydro: oklch(0.72 0.13 240);
+    --electro: oklch(0.72 0.15 300);
+    --cryo: oklch(0.8 0.1 210);
+    --anemo: oklch(0.8 0.12 170);
+    --geo: oklch(0.82 0.13 85);
+    --dendro: oklch(0.78 0.16 135);
+    --physical: oklch(0.72 0.02 250);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --font-sans: 'Noto Sans', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Noto Serif SC', Georgia, serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-pyro: var(--pyro);
+  --color-hydro: var(--hydro);
+  --color-electro: var(--electro);
+  --color-cryo: var(--cryo);
+  --color-anemo: var(--anemo);
+  --color-geo: var(--geo);
+  --color-dendro: var(--dendro);
+  --color-physical: var(--physical);
+  --color-star4: var(--star4);
+  --color-star5: var(--star5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+}

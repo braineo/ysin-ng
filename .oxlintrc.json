@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react", "react-perf", "jsx-a11y", "import"],
+  "categories": { "correctness": "error", "suspicious": "warn" },
+  "rules": { "react/react-in-jsx-scope": "off" },
+  "env": { "builtin": true, "browser": true },
+  "ignorePatterns": ["src/routeTree.gen.ts", "src/components/ui/**"]
+}
