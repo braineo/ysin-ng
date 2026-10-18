@@ -124,7 +124,6 @@ export const character = memo((key: string): CharacterData | null => {
   const tEn = g.talents(enName, EN) as Gdb
   const tLocal = g.talents(enName, L) as Gdb
   const cEn = g.constellations(enName, EN) as Gdb
-  const cLocal = g.constellations(enName, L) as Gdb
   const element = ELEMENT[en.elementType]
   const weapon = WEAPON[en.weaponType]
   const asc = prop(en.substatType)
@@ -152,7 +151,6 @@ export const character = memo((key: string): CharacterData | null => {
   return {
     slug,
     name: local.name,
-    title: local.title ?? '',
     rarity: en.rarity,
     element,
     weapon,
@@ -174,39 +172,36 @@ export const character = memo((key: string): CharacterData | null => {
       ),
     })),
     boost: { skill: boostOf(tEn.combat2.name), burst: boostOf(tEn.combat3.name) },
-    passives: ['passive1', 'passive2', 'passive3', 'passive4']
-      .filter((p) => tLocal[p])
-      .map((p) => ({ name: tLocal[p].name, text: tLocal[p].description })),
-    constellations: [1, 2, 3, 4, 5, 6].map((c) => ({
-      name: cLocal[`c${c}`].name,
-      text: cLocal[`c${c}`].description,
-    })),
   }
 })
 
 export const weapons = memo((key: string): WeaponData[] => {
   const [type, lang] = key.split('|') as [WeaponType, Lang] // memo key: "<type>|<lang>"
-  return (g.weapons('names', { matchCategories: true, ...EN }) as string[])
-    .map((n) => [g.weapons(n, EN) as Gdb, g.weapons(n, opts(lang)) as Gdb])
-    .filter(([w]) => WEAPON[w.weaponType] === type && w.rarity >= 3 && w.stats)
-    .toSorted(([a], [b]) => b.rarity - a.rarity || a.name.localeCompare(b.name))
-    .map(([w, local]) => {
-      const stats: WeaponData['stats'] = {}
-      for (const lv of WEAPON_LEVEL_KEYS) {
-        const s = statsAt(w, lv)
-        stats[lv] = { atk: s.attack, spec: s.specialized ?? 0 }
-      }
-      return {
-        id: w.id,
-        name: local.name,
-        rarity: w.rarity,
-        ...iconUrl(w.images.filename_icon, w.images.mihoyo_icon),
-        mainStat: prop(w.mainStatType).stat,
-        stats,
-        passiveName: local.effectName ?? '',
-        passive: [1, 2, 3, 4, 5].map((r) => local[`r${r}`]?.description ?? ''),
-      }
-    })
+  return (
+    (g.weapons('names', { matchCategories: true, ...EN }) as string[])
+      .map((n) => [g.weapons(n, EN) as Gdb, g.weapons(n, opts(lang)) as Gdb])
+      .filter(([w]) => WEAPON[w.weaponType] === type && w.rarity >= 3 && w.stats)
+      // Prized Isshin Blade is listed once per quest form, all with one id: keep the first
+      .filter(([w], i, all) => all.findIndex(([x]) => x.id === w.id) === i)
+      .toSorted(([a], [b]) => b.rarity - a.rarity || a.name.localeCompare(b.name))
+      .map(([w, local]) => {
+        const stats: WeaponData['stats'] = {}
+        for (const lv of WEAPON_LEVEL_KEYS) {
+          const s = statsAt(w, lv)
+          stats[lv] = { atk: s.attack, spec: s.specialized ?? 0 }
+        }
+        return {
+          id: w.id,
+          name: local.name,
+          rarity: w.rarity,
+          ...iconUrl(w.images.filename_icon, w.images.mihoyo_icon),
+          mainStat: prop(w.mainStatType).stat,
+          stats,
+          passiveName: local.effectName ?? '',
+          passive: [1, 2, 3, 4, 5].map((r) => local[`r${r}`]?.description ?? ''),
+        }
+      })
+  )
 })
 
 export const artifactSets = memo((lang: string): ArtifactSetData[] =>

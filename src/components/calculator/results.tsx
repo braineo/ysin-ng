@@ -253,32 +253,6 @@ export function Results({ char, sets, build, result, game, onFocus }: Props) {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardContent className="space-y-3 pt-6 text-sm">
-          <TextList title={t('passives')} items={char.passives} />
-          <TextList
-            title={t('constellations')}
-            items={char.constellations.map((c, i) => ({ ...c, name: `C${i + 1} · ${c.name}` }))}
-          />
-        </CardContent>
-      </Card>
     </div>
-  )
-}
-
-function TextList({ title, items }: { title: string; items: { name: string; text: string }[] }) {
-  return (
-    <details>
-      <summary className="cursor-pointer font-semibold">{title}</summary>
-      <dl className="mt-2 space-y-2">
-        {items.map((it) => (
-          <div key={it.name}>
-            <dt className="font-medium">{it.name}</dt>
-            <dd className="whitespace-pre-line text-muted-foreground">{it.text}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
   )
 }

@@ -15,9 +15,17 @@ import {
 import { focusRow, type Build, type HitResult } from '#/engine/calc'
 import { optimize, type OptimizeResult } from '#/engine/optimize'
 import { SUB_KEYS } from '#/engine/tables'
-import type { ArtifactSetData, CharacterData, WeaponData } from '#/engine/types'
+import type { ArtifactSetData, CharacterData, Element, WeaponData } from '#/engine/types'
 import { useT } from '#/lib/i18n'
 import { useFmt } from './results'
+
+export function useMainLabel(element: Element) {
+  const t = useT()
+  return (k: string) =>
+    k === 'dmg'
+      ? `${t(element)} ${t('main.dmg')}`
+      : t(k === 'physical' ? 'main.physical' : `buff.${k}`)
+}
 
 type Props = {
   char: CharacterData
@@ -55,10 +63,7 @@ export function OptimizerCard({ char, weapon, sets, build, rows, onApply }: Prop
     setResult(found ?? 'none')
   }
 
-  const mainLabel = (k: string) =>
-    k === 'dmg'
-      ? `${t(char.element)} ${t('main.dmg')}`
-      : t(k === 'physical' ? 'main.physical' : `buff.${k}`)
+  const mainLabel = useMainLabel(char.element)
 
   return (
     <Card>

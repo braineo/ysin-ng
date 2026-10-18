@@ -3,11 +3,13 @@ import { ArrowLeft } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { BuildForm } from '#/components/calculator/build-form'
 import { OptimizerCard } from '#/components/calculator/optimizer-card'
+import { PiecesCard, RatingCard } from '#/components/calculator/rating-card'
 import { Results } from '#/components/calculator/results'
 import { SaveBar } from '#/components/calculator/save-bar'
 import { ELEMENT_BG, GameIcon } from '#/components/game-icon'
 import { Badge } from '#/components/ui/badge'
 import { calculate, defaultBuild, focusRow, type Build } from '#/engine/calc'
+import { rate } from '#/engine/rating'
 import type { ArtifactSetData, CharacterData, WeaponData } from '#/engine/types'
 import { useT } from '#/lib/i18n'
 import {
@@ -114,6 +116,7 @@ function Calculator() {
   const { build } = state
   const weapon = weapons.find((w) => w.id === state.weaponId) ?? null
   const result = useMemo(() => calculate(char, weapon, sets, build), [char, weapon, sets, build])
+  const rating = useMemo(() => rate(char, weapon, sets, build), [char, weapon, sets, build])
   const patch = (p: Partial<Build>) => setState((s) => ({ ...s, build: { ...s.build, ...p } }))
 
   function save(asNew: boolean) {
@@ -167,7 +170,6 @@ function Calculator() {
         </div>
         <div className="min-w-0">
           <h1 className="font-display text-3xl font-bold">{char.name}</h1>
-          <p className="text-sm text-muted-foreground">{char.title}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             <Badge variant="secondary" className="gap-1.5">
               <span className={cn('size-2 rounded-full', ELEMENT_BG[char.element])} />
@@ -214,14 +216,22 @@ function Calculator() {
             onApply={patch}
           />
         </div>
-        <Results
-          char={char}
-          sets={sets}
-          build={build}
-          result={result}
-          game={state.game}
-          onFocus={(focus) => patch({ focus })}
-        />
+        <div className="min-w-0 space-y-5">
+          {rating && (
+            <>
+              <RatingCard char={char} build={build} rows={result.rows} rating={rating} />
+              <PiecesCard char={char} sets={sets} build={build} rating={rating} />
+            </>
+          )}
+          <Results
+            char={char}
+            sets={sets}
+            build={build}
+            result={result}
+            game={state.game}
+            onFocus={(focus) => patch({ focus })}
+          />
+        </div>
       </div>
     </div>
   )

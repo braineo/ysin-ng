@@ -1,8 +1,15 @@
 // Profile import from enka.network (public showcase data). Docs: https://api.enka.network
-import { calculate, defaultBuild, focusRow, type ArtifactSlot, type Build } from '#/engine/calc'
+import {
+  calculate,
+  defaultBuild,
+  focusRow,
+  type ArtifactPiece,
+  type ArtifactSlot,
+  type Build,
+} from '#/engine/calc'
 import { LEVEL_KEYS, SUB_ROLL, WEAPON_LEVEL_KEYS, type MainKey, type SubKey } from '#/engine/tables'
 import type { CharacterData, Element } from '#/engine/types'
-import type { Lang } from '#/lib/assets'
+import { iconUrl, type Lang } from '#/lib/assets'
 import type { GamePanel, SavedBuild } from '#/lib/store'
 import { artifactSets, character, roster, slugById, weapons } from './genshin.server'
 
@@ -189,6 +196,7 @@ export function toBuild(
 
   build.rolls = Object.fromEntries(Object.keys(SUB_ROLL).map((k) => [k, 0])) as Build['rolls']
   build.mainValues = { flower: 0, plume: 0, sands: 0, goblet: 0, circlet: 0 }
+  build.pieces = {}
   const setCount = new Map<number, number>()
   let weapon: Raw | undefined
 
@@ -200,14 +208,29 @@ export function toBuild(
     const slot = SLOT[item.flat?.equipType]
     if (!slot) continue
     const main = item.flat.reliquaryMainstat
+    const mainValue = statValue(main.mainPropId, main.statValue)
+    let key: MainKey | null = slot === 'flower' ? 'hp' : slot === 'plume' ? 'atk' : null
     if (slot === 'sands' || slot === 'goblet' || slot === 'circlet') {
-      const key = mainKey(main.mainPropId, char.element)
+      key = mainKey(main.mainPropId, char.element)
       if (key) build.mains[slot] = key
-      build.mainValues[slot] = key ? statValue(main.mainPropId, main.statValue) : 0
-    } else build.mainValues[slot] = statValue(main.mainPropId, main.statValue)
+      build.mainValues[slot] = key ? mainValue : 0
+    } else build.mainValues[slot] = mainValue
+    const subs: ArtifactPiece['subs'] = []
     for (const s of item.flat.reliquarySubstats ?? []) {
       const k = SUB[s.appendPropId]
-      if (k) build.rolls[k] += statValue(s.appendPropId, s.statValue) / SUB_ROLL[k]
+      if (!k) continue
+      const value = statValue(s.appendPropId, s.statValue)
+      build.rolls[k] += value / SUB_ROLL[k]
+      subs.push({ key: k, value })
+    }
+    build.pieces[slot] = {
+      setId: item.flat.setId,
+      icon: iconUrl(item.flat.icon).icon,
+      rarity: Number(item.flat.rankLevel ?? 5),
+      level: Math.max(0, Number(item.reliquary?.level ?? 1) - 1),
+      main: key,
+      mainValue,
+      subs,
     }
     const setId = item.flat.setId
     if (setIds.has(setId)) setCount.set(setId, (setCount.get(setId) ?? 0) + 1)

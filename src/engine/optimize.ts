@@ -77,7 +77,7 @@ export async function optimize(
   return best && { ...best, evaluated }
 }
 
-function climb(
+export function climb(
   base: Build,
   mains: Mains,
   opts: OptimizeOptions,

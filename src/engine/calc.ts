@@ -45,9 +45,23 @@ export type Build = {
   focus?: string
   /** exact main-stat values from an imported build; default is the 5★ +20 value */
   mainValues?: Partial<Record<ArtifactSlot, number>>
+  /** the imported pieces, for per-piece detail; `rolls` and `mains` stay the source of truth */
+  pieces?: Partial<Record<ArtifactSlot, ArtifactPiece>>
 }
 
 export type ArtifactSlot = 'flower' | 'plume' | 'sands' | 'goblet' | 'circlet'
+
+export type ArtifactPiece = {
+  setId: number
+  icon: string
+  rarity: number
+  level: number
+  /** null = a main stat the calculator ignores, e.g. another element's DMG goblet */
+  main: MainKey | null
+  mainValue: number
+  /** in display order */
+  subs: { key: SubKey; value: number }[]
+}
 
 export type Panel = {
   base: { hp: number; atk: number; def: number }

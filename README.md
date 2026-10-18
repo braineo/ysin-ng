@@ -12,6 +12,9 @@ shadcn/ui + Tailwind v4 · oxlint · oxfmt · [genshin-db](https://github.com/th
   build's _target_ for the optimizer and comparisons.
 - **Saved builds** (`/builds`): stored in this browser only (localStorage, no account or cloud). The calculator also keeps
   a per-character draft, so a reload never loses work. Export / import a JSON file to back up or move builds.
+- **Artifact rating** (`src/engine/rating.ts`, after Ysin): substat score and artifact score against reference
+  artifacts (100 = 25 average rolls), CRIT ratio loss, and the target-damage gain of each single upgrade
+  (+1 roll per substat, best main-stat swap per slot, +1 talent level, +5% DMG), best first.
 - **Substat optimizer**: best integer split of N rolls for the target row, with an Energy Recharge floor and optional
   sands / goblet / circlet search. Greedy + hill climbing, checked against brute force in `optimize.test.ts`.
 - **Compare** (`/compare`): 2–4 saved builds side by side against a chosen baseline: target damage, stats, and every

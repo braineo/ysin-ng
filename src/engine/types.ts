@@ -70,7 +70,6 @@ export type TalentRow = {
 export type CharacterData = {
   slug: string
   name: string
-  title: string
   rarity: number
   element: Element
   weapon: WeaponType
@@ -83,8 +82,6 @@ export type CharacterData = {
   talents: { key: 'normal' | 'skill' | 'burst'; name: string; icon: string; rows: TalentRow[] }[]
   /** +3 talent level from C3 / C5 */
   boost: { skill: number; burst: number }
-  passives: { name: string; text: string }[]
-  constellations: { name: string; text: string }[]
 }
 
 export type WeaponData = {
