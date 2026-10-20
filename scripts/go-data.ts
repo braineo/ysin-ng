@@ -45,8 +45,11 @@ const reads = (n: GoNode, out: Set<string>) => {
 const helper = (p: string) => /^(teamBuff\.)?(tally|nonStacking)\./.test(p)
 const isCond = (x?: GoNode) => x?.operation === 'read' && x.path![0] === 'conditional'
 
-/** keep only what the evaluator reads; GO's ascension / weapon substat reads are genshin-db's job */
-function prune(data: Record<string, unknown>): GoSheet {
+/**
+ * Keep only what the evaluator reads; GO's ascension / weapon substat reads are genshin-db's job.
+ * `rows` are the character's damage-row formulas, which may read helper paths and toggles too.
+ */
+function prune(data: Record<string, unknown>, rows: GoNode[] = []): GoSheet {
   const nodes: Record<string, GoNode> = {}
   const conds: Record<string, Set<string>> = {}
   const visit = (obj: unknown, prefix: string) => {
@@ -70,15 +73,19 @@ function prune(data: Record<string, unknown>): GoSheet {
   // helper paths (tally, nonStacking) only matter when a stat node reads them, e.g. lunar-only ones don't
   const needed = new Set<string>()
   const queue = Object.keys(nodes).filter((p) => !helper(p))
+  const follow = (n: GoNode) => {
+    for (const r of reads(n, new Set()))
+      for (const q of [r, `teamBuff.${r}`]) if (nodes[q] && !needed.has(q)) queue.push(q)
+  }
+  rows.forEach(follow)
   while (queue.length) {
     const p = queue.pop()!
     if (needed.has(p)) continue
     needed.add(p)
-    for (const r of reads(nodes[p], new Set()))
-      for (const q of [r, `teamBuff.${r}`]) if (nodes[q] && !needed.has(q)) queue.push(q)
+    follow(nodes[p])
   }
   for (const p of Object.keys(nodes)) if (!needed.has(p)) delete nodes[p]
-  for (const n of Object.values(nodes))
+  for (const n of [...Object.values(nodes), ...rows])
     for (const r of reads(n, new Set()))
       if (r.startsWith('conditional.')) conds[r.slice(12)] ??= new Set()
   // a toggle's states are the strings it is compared against (match) or looked up by (lookup)
@@ -95,7 +102,7 @@ function prune(data: Record<string, unknown>): GoSheet {
     n.operands.forEach(states)
     for (const t of Object.values(n.table ?? {})) states(t)
   }
-  Object.values(nodes).forEach(states)
+  for (const n of [...Object.values(nodes), ...rows]) states(n)
   return {
     nodes,
     // a toggle without states is only compared against other toggles (e.g. "same as the absorbed element")
@@ -202,10 +209,10 @@ type CharSheet = {
 
 function moveKind(n: NonNullable<Field['node']>): GoMove['kind'] | null {
   if (n.operation === 'data' && n.operands[0]?.path?.join('.') === 'hit.dmg') return 'damage'
-  const variant = n.info?.variant ?? ''
-  if (variant === 'heal') return 'heal'
-  if (/^(lunar|stellar)/.test(variant)) return 'lunar'
-  return reads(n, new Set()).has('total.shield_') ? 'shield' : null
+  if (/^(lunar|stellar)/.test(n.info?.variant ?? '')) return 'lunar'
+  // GO's customHealNode / customShieldNode: heals add total.healInc, shields scale by total.shield_
+  const r = reads(n, new Set())
+  return r.has('total.healInc') ? 'heal' : r.has('total.shield_') ? 'shield' : null
 }
 const flatten = (o: object, prefix = ''): Record<string, GoNode> =>
   Object.fromEntries(
@@ -273,8 +280,11 @@ async function collect(
   const out: Record<string, GoSheet> = {}
   for (const k of keys) {
     const sheet = get(k)
-    const s = prune(sheet.data)
     const moves = isChar ? moveFields(sheet as unknown as CharSheet) : []
+    const s = prune(
+      sheet.data,
+      moves.flatMap((m) => Object.values(m.move.data)),
+    )
     if (!Object.keys(s.nodes).length && !moves.length) continue
     if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds)
     if (moves.length) {
