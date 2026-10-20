@@ -224,8 +224,36 @@ async function labels(
     if (zh && untranslated(zh.name, out.en[id]?.name))
       zh.name = sectionName(d.section).zh ?? zh.name;
   }
+  // no label at all: GO's ids say where the toggle comes from ("c6Lunarbloom" = C6, "a4…" = second
+  // ascension passive); name it after that constellation / passive, plus the reaction it names
+  for (const id of Object.keys(conds)) {
+    if (out.en[id]?.name) continue;
+    const cond = id.slice(id.indexOf(".") + 1);
+    const m = cond.match(/^(c\d|a[14])(\w*)$/i);
+    const section =
+      m &&
+      (m[1][0].toLowerCase() === "c"
+        ? `constellation${m[1][1]}`
+        : m[1] === "a1"
+          ? "passive1"
+          : "passive2");
+    if (!section) continue;
+    const reaction = m[2]?.toLowerCase();
+    for (const lang of ["en", "zh"] as const) {
+      const name = [
+        sectionName(section)[lang],
+        LUNAR_NAMES[reaction ?? ""]?.[lang] ?? reactionText(reaction)[lang],
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      if (name) out[lang][id] = { ...out[lang][id], name };
+    }
+  }
   return out;
 }
+
+const reactionText = (r?: string): GoText =>
+  r ? both((l) => locale(l, "sheet_gen").reaction?.[r]) : {};
 
 type Field = {
   node?: GoNode & {

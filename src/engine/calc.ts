@@ -565,8 +565,9 @@ export function calcRows(
       avg: nonCrit * (1 + cr * cd),
     };
   });
-  // reaction rows (Lunar-Charged, Stellar Swirl, ...) the character cannot trigger come out as 0
-  return rows.filter((r) => r.talent !== "reaction" || r.avg > 0);
+  // reaction rows (Lunar-Charged, Stellar Swirl, ...) the character cannot trigger, and constellation
+  // rows below the build's constellation, come out as 0
+  return rows.filter((r) => !/^(reaction|constellation)/.test(r.talent) || r.avg > 0);
 }
 
 /** Transformative reactions the character can trigger: no DEF, no crit. Swirl is listed per swirled element. */

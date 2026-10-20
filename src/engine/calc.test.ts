@@ -9,7 +9,7 @@ import {
   type Build,
   type TeamMate,
 } from "./calc";
-import { SUB_KEYS } from "./tables";
+import { SUB_KEYS, levelMult } from "./tables";
 import type { CharacterData, TransReaction } from "./types";
 
 describe("multipliers", () => {
@@ -218,5 +218,29 @@ describe("team", () => {
   test("two Viridescent Venerer wearers shred once", () => {
     const r = run({ sets: [setId("Viridescent Venerer"), null] }, [kazuha]);
     expect(r.panel.buffs.filter((b) => b.key === "res" && b.on === "pyro")).toHaveLength(1);
+  });
+});
+
+describe("lunar and Stellar Glimmer reactions", () => {
+  const sets = artifactSets("en");
+  test("Lunar-Charged: level multiplier × 3 × EM bonus × RES, and it can crit", () => {
+    const char = character("fischl|en")!;
+    const build = { ...defaultBuild(char), rolls: { ...defaultBuild(char).rolls, em: 5 } };
+    const { panel, rows } = calculate(char, null, sets, build);
+    const row = rows.find((r) => r.id === "reaction.lunarcharged")!;
+    const em = panel.em;
+    expect(row.nonCrit).toBeCloseTo(levelMult(90) * 3 * (1 + (6 * em) / (em + 2000)) * 0.9, 2);
+    expect(row.avg).toBeCloseTo(row.nonCrit * (1 + panel.cr * panel.cd), 6);
+    expect(row.crit).toBeCloseTo(row.nonCrit * (1 + panel.cd), 6);
+  });
+  test("reactions a character cannot trigger are left out", () => {
+    const { rows } = calculate(
+      character("fischl|en")!,
+      null,
+      sets,
+      defaultBuild(character("fischl|en")!),
+    );
+    expect(rows.some((r) => r.id === "reaction.lunarcharged")).toBe(true);
+    expect(rows.some((r) => r.id === "reaction.stellarswirl")).toBe(false);
   });
 });
