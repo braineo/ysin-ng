@@ -1,0 +1,68 @@
+# Exports Genshin Optimizer's formulas to the go-data branch, served by jsDelivr:
+#   https://cdn.jsdelivr.net/gh/braineo/ysin-ng@<go-data commit>/passives.json
+name: GO data
+
+on:
+  push:
+    paths:
+      - scripts/go-data.ts
+      - src/engine/passives.ts
+      - .github/workflows/go-data.yml
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Genshin Optimizer branch, tag or commit
+        default: master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: go-data
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: frzyc/genshin-optimizer
+          ref: ${{ inputs.ref || 'master' }}
+          path: go
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: go/.nvmrc
+          cache: yarn
+          cache-dependency-path: go/yarn.lock
+      - name: Install GO dependencies
+        working-directory: go
+        run: yarn install --immutable
+      - uses: oven-sh/setup-bun@v2
+      - name: Export
+        run: bun scripts/go-data.ts go out/passives.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-data
+          path: out
+      - name: Publish to go-data
+        run: |
+          sha=$(git -C go rev-parse HEAD)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git fetch --depth 1 origin go-data; then
+            git worktree add -B go-data pub FETCH_HEAD
+          else
+            git worktree add --orphan -b go-data pub
+          fi
+          find pub -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r out/. pub/
+          cd pub
+          git add -A
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -m "Genshin Optimizer $sha" -m "exported by ${{ github.repository }}@${{ github.sha }} (${{ github.ref_name }})"
+          git push origin go-data

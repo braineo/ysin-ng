@@ -90,10 +90,18 @@ export function rowKind(name: string): TalentRow['kind'] | null {
   return null
 }
 
+/** Bow charged shots with their own names: Ganyu, Yelan, Tighnari, Lyney, Sethos. */
+const CHARGED_ARROW =
+  /frostflake|breakthrough barb|wreath arrow|clusterbloom arrow|prop arrow|pyrotechnic strike|shadowpiercing/i
+
 export function attackKey(talent: 'normal' | 'skill' | 'burst', name: string): AttackKey {
   if (talent !== 'normal') return talent
   if (/plunge/i.test(name)) return 'plunge'
-  if (/charged|aimed|charge level/i.test(name)) return 'charged'
+  if (
+    /charged|aimed|charge level|kesagiri|saichimonji|star jade/i.test(name) ||
+    CHARGED_ARROW.test(name)
+  )
+    return 'charged'
   return 'normal'
 }
 
@@ -104,7 +112,11 @@ export function hitElement(
   weapon: WeaponType,
 ): Element {
   if (attack === 'skill' || attack === 'burst' || weapon === 'catalyst') return element
-  if (weapon === 'bow' && /fully-charged|charge level|frostflake/i.test(name)) return element
+  if (
+    weapon === 'bow' &&
+    (/fully-charged|charge level|kindling arrow|riptide/i.test(name) || CHARGED_ARROW.test(name))
+  )
+    return element
   return 'physical'
 }
 

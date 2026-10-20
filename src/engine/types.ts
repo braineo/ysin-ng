@@ -1,3 +1,5 @@
+import type { GoSheet } from './passives'
+
 export type Element =
   | 'pyro'
   | 'hydro'
@@ -82,6 +84,9 @@ export type CharacterData = {
   talents: { key: 'normal' | 'skill' | 'burst'; name: string; icon: string; rows: TalentRow[] }[]
   /** +3 talent level from C3 / C5 */
   boost: { skill: number; burst: number }
+  /** Genshin Optimizer key ("HuTao") and passives / constellations */
+  goKey: string
+  passives?: GoSheet
 }
 
 export type WeaponData = {
@@ -95,6 +100,8 @@ export type WeaponData = {
   passiveName: string
   /** passive text for R1..R5 */
   passive: string[]
+  goKey: string
+  passives?: GoSheet
 }
 
 export type ArtifactSetData = {
@@ -104,7 +111,6 @@ export type ArtifactSetData = {
   iconFallback: string
   twoPc: string
   fourPc: string
-  /** English set name, used to look up hand-written 4pc effects */
-  key: string
-  twoPcBuffs: Omit<Buff, 'source'>[]
+  goKey: string
+  passives?: GoSheet
 }

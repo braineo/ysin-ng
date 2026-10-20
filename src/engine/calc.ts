@@ -1,8 +1,9 @@
-import { FOUR_PC } from './sets'
+import { buffOf, evaluatePassives, type GoLabel, type GoSheet } from './passives'
 import {
   DMG_REACTIONS,
   MAIN_STAT,
   SUB_KEYS,
+  LEVEL_KEYS,
   SUB_ROLL,
   TRANS,
   TRANS_BY_ELEMENT,
@@ -41,6 +42,8 @@ export type Build = {
   enemyLevel: number
   enemyRes: number
   custom: Buff[]
+  /** passive toggles by GO id ("HuTao.SanguineRouge") → state; unset or '' = off, as in GO */
+  conds?: Record<string, string>
   /** id of the result row the optimizer and comparison target (default: highest average damage) */
   focus?: string
   /** exact main-stat values from an imported build; default is the 5★ +20 value */
@@ -142,29 +145,27 @@ export function scalingStat(char: CharacterData): ScalingStat {
   return (Object.entries(count).toSorted((a, b) => b[1] - a[1])[0][0] as ScalingStat) ?? 'atk'
 }
 
-export type SetEffect = { name: string; pieces: 2 | 4; note: string; buffs: Buff[] }
-
-export function setEffects(sets: ArtifactSetData[], build: Build, char: CharacterData, er: number) {
+/** Equipped sets: the same id twice (or a lone first id with `fourPc`) = 4-piece. */
+function equippedSets(sets: ArtifactSetData[], build: Build) {
   const [a, b] = build.sets.map((id) => sets.find((s) => s.id === id))
-  const out: SetEffect[] = []
-  const two = (s: ArtifactSetData) =>
-    out.push({
-      name: s.name,
-      pieces: 2,
-      note: s.twoPc,
-      buffs: s.twoPcBuffs.map((x) => ({ ...x, source: `${s.name} 2pc` })),
-    })
-  if (a && build.fourPc) {
-    two(a)
-    const four = FOUR_PC[a.key]
-    const buffs =
-      four?.buffs({ weapon: char.weapon, er }).map((x) => ({ ...x, source: `${a.name} 4pc` })) ?? []
-    out.push({ name: a.name, pieces: 4, note: four?.note ?? '', buffs })
-  } else {
-    if (a) two(a)
-    if (b) two(b)
-  }
-  return out
+  if (a && build.fourPc) return [{ set: a, pieces: 4 as const }]
+  return [a, b].filter((s) => !!s).map((set) => ({ set, pieces: 2 as const }))
+}
+
+/** A toggle in play: GO id, states and labels; `value` is the state used now. */
+export type Toggle = {
+  id: string
+  states: string[]
+  value: string
+  labels: { en?: GoLabel; zh?: GoLabel }
+}
+/** One sheet in play (character, weapon, set) with its toggles and the buffs it adds now. */
+export type PassiveSource = { source: string; note: string; toggles: Toggle[]; buffs: Buff[] }
+
+function baseStats(char: CharacterData, weapon: WeaponData | null, build: Build) {
+  const st = char.stats[build.level] ?? char.stats['90']
+  const wAtk = weapon ? (weapon.stats[build.weaponLevel] ?? weapon.stats['90']).atk : 0
+  return { hp: st.hp, atk: st.atk + wAtk, def: st.def }
 }
 
 export function collectBuffs(
@@ -192,13 +193,64 @@ export function collectBuffs(
     const ws = weapon.stats[build.weaponLevel] ?? weapon.stats['90']
     buffs.push(...specBuff(weapon.mainStat, ws.spec, char.element, weapon.name))
   }
-  // Emblem 4pc scales with final ER, which includes the sets' own ER bonus: resolve in two passes
-  const setEr = sum(
-    setEffects(sets, build, char, 0).flatMap((e) => e.buffs),
-    'er',
+  const equipped = equippedSets(sets, build)
+  const sheets = [
+    { source: char.name, note: '', sheet: char.passives },
+    { source: weapon?.name ?? '', note: '', sheet: weapon?.passives }, // text is in the build form
+    ...equipped.map((e) => ({
+      source: e.set.name,
+      note: e.pieces === 4 ? `${e.set.twoPc} ${e.set.fourPc}` : e.set.twoPc,
+      sheet: e.set.passives,
+    })),
+  ].filter((s): s is { source: string; note: string; sheet: GoSheet } => !!s.sheet)
+  const toggles = sheets.map(({ sheet }) =>
+    Object.entries(sheet.conds).map(([id, states]): Toggle => ({
+      id,
+      states,
+      value: build.conds?.[id] ?? '',
+      labels: { en: sheet.labels?.en[id], zh: sheet.labels?.zh[id] },
+    })),
   )
-  const effects = setEffects(sets, build, char, 1 + sum(buffs, 'er') + setEr)
-  return { buffs: [...buffs, ...effects.flatMap((e) => e.buffs)], effects }
+  const talent = (t: 'normal' | 'skill' | 'burst') => talentLevel(char, build, t) - 1
+  const plain = buffs.filter((b) => !b.from)
+  const go = evaluatePassives({
+    sheets,
+    inputs: {
+      charKey: char.goKey,
+      charEle: char.element,
+      weaponType: char.weapon,
+      activeCharKey: char.goKey,
+      'target.charKey': char.goKey,
+      'target.charEle': char.element,
+      'target.weaponType': char.weapon,
+      'active.charKey': char.goKey,
+      'active.charEle': char.element,
+      lvl: Number.parseInt(build.level),
+      asc: Math.min(Math.floor(LEVEL_KEYS.indexOf(build.level) / 2), 6),
+      constellation: build.cons,
+      'weapon.key': weapon?.goKey,
+      'weapon.refinement': build.refine,
+      'total.autoIndex': talent('normal'),
+      'total.skillIndex': talent('skill'),
+      'total.burstIndex': talent('burst'),
+      ...Object.fromEntries(equipped.map((e) => [`artSet.${e.set.goKey}`, e.pieces])),
+      ...Object.fromEntries(
+        toggles.flat().map((t) => [`conditional.${t.id}`, t.value || undefined]),
+      ),
+    },
+    base: baseStats(char, weapon, build),
+    own: (k) => {
+      const b = buffOf(k)
+      return b ? sum(plain, b.key, b.on) : 0
+    },
+  })
+  const passives = sheets.map(({ source, note }, i): PassiveSource => ({
+    source,
+    note,
+    toggles: toggles[i],
+    buffs: go.buffs.filter((b) => b.source === source),
+  }))
+  return { buffs: [...buffs, ...go.buffs], passives, infusion: go.infusion }
 }
 
 export function buildPanel(
@@ -207,9 +259,7 @@ export function buildPanel(
   buffs: Buff[],
   build: Build,
 ): Panel {
-  const st = char.stats[build.level] ?? char.stats['90']
-  const wAtk = weapon ? (weapon.stats[build.weaponLevel] ?? weapon.stats['90']).atk : 0
-  const base = { hp: st.hp, atk: st.atk + wAtk, def: st.def }
+  const base = baseStats(char, weapon, build)
   const plain = buffs.filter((x) => !x.from)
   if (plain.length === buffs.length) return panelOf(base, buffs)
   // conversions read the panel before any conversion is applied, so they don't feed each other
@@ -324,7 +374,7 @@ export function calcRows(
           return
         }
         const hits = v.count * v.terms.reduce((n, term) => Math.max(n, term.count), 1)
-        base += hits * (sum(b, 'flat') + sum(b, 'flat', row.attack))
+        base += hits * (sum(b, 'flat') + sum(b, 'flat', row.attack) + sum(b, 'flat', element))
 
         let amp = 1
         let reaction: Reaction | undefined
@@ -368,19 +418,23 @@ export function calcRows(
   return out
 }
 
-/** Transformative reactions the character can trigger: no DEF, no crit. */
+/** Transformative reactions the character can trigger: no DEF, no crit. Swirl is listed per swirled element. */
 export function calcTransformative(char: CharacterData, panel: Panel, build: Build) {
   const em = panel.em
   const lv = levelMult(Number.parseInt(build.level))
-  return (TRANS_BY_ELEMENT[char.element] ?? []).map((r: TransReaction) => {
+  return (TRANS_BY_ELEMENT[char.element] ?? []).flatMap((r: TransReaction) => {
     const { coef, element } = TRANS[r]
     const bonus = 1 + (16 * em) / (em + 2000) + sum(panel.buffs, 'react', r)
-    return {
+    const hit = (el: Element) => ({
       reaction: r,
-      damage: lv * coef * bonus * resMult(build.enemyRes - sum(panel.buffs, 'res', element)),
-    }
+      element: el,
+      damage: lv * coef * bonus * resMult(build.enemyRes - sum(panel.buffs, 'res', el)),
+    })
+    return r === 'swirl' ? SWIRLED.map(hit) : [hit(element)]
   })
 }
+
+const SWIRLED: Element[] = ['hydro', 'pyro', 'cryo', 'electro']
 
 export function calculate(
   char: CharacterData,
@@ -388,12 +442,12 @@ export function calculate(
   sets: ArtifactSetData[],
   build: Build,
 ) {
-  const { buffs, effects } = collectBuffs(char, weapon, sets, build)
+  const { buffs, passives, infusion } = collectBuffs(char, weapon, sets, build)
   const panel = buildPanel(char, weapon, buffs, build)
   return {
     panel,
-    effects,
-    rows: calcRows(char, panel, build),
+    passives,
+    rows: calcRows(char, panel, { ...build, infusion: build.infusion || infusion }),
     transformative: calcTransformative(char, panel, build),
   }
 }
