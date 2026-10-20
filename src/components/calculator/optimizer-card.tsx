@@ -80,7 +80,7 @@ export function OptimizerCard({ char, weapon, sets, build, rows, onApply }: Prop
             onApply({ focus })
             setResult(null)
           }}
-          options={targets.map((r) => ({ value: r.id, label: `${r.talent} · ${r.label}` }))}
+          options={targets.map((r) => ({ value: r.id, label: `${r.group} · ${r.label}` }))}
         />
         <div className="grid grid-cols-2 gap-3">
           <Field id="opt-total" label={t('totalRolls')}>

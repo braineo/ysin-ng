@@ -99,7 +99,53 @@ export function keepPath(path: string) {
   return !!m && !!buffOf(m[2])
 }
 
-type Value = number | string | undefined
+export type Value = number | string | undefined
+export type Reader = (path: string[]) => Value
+
+/** Evaluates a GO formula tree; `read` resolves the input paths it refers to. */
+export function evalNode(n: GoNode, read: Reader): Value {
+  const o = n.operands
+  const ev = (x: GoNode) => evalNode(x, read)
+  switch (n.operation) {
+    case 'const':
+      return n.value
+    case 'read':
+      return read(n.path!)
+    case 'add':
+      return o.reduce((s, x) => s + num(ev(x)), 0)
+    case 'mul':
+      return o.reduce((s, x) => s * num(ev(x)), 1)
+    case 'min':
+      return Math.min(...o.map((x) => num(ev(x))))
+    case 'max':
+      return Math.max(...o.map((x) => num(ev(x))))
+    case 'sum_frac': {
+      const [a, b] = o.map((x) => num(ev(x)))
+      return a / (a + b)
+    }
+    case 'threshold':
+      return num(ev(o[0])) >= num(ev(o[1])) ? ev(o[2]) : ev(o[3])
+    case 'match':
+      return ev(o[0]) === ev(o[1]) ? ev(o[2]) : o[3] && ev(o[3])
+    case 'subscript':
+      return n.list![num(ev(o[0]))]
+    case 'lookup': {
+      const hit = n.table![String(ev(o[0]))]
+      return hit ? ev(hit) : o[1] && ev(o[1])
+    }
+    case 'data': // shortcut: a heal/shield formula's own extra data is ignored; GO rarely sets one
+      return ev(o[0])
+    case 'prio': // first non-empty string, e.g. element: infusion before physical
+      for (const x of o) {
+        const v = ev(x)
+        if (v !== undefined && v !== '') return v
+      }
+      return undefined
+    default:
+      throw new Error(`unsupported GO operation ${n.operation}`)
+  }
+}
+
 export type PassiveInput = {
   /** sheets in play: character, weapon, equipped sets */
   sheets: { source: string; sheet: GoSheet }[]
@@ -123,7 +169,7 @@ export function evaluatePassives({ sheets, inputs, base, own }: PassiveInput) {
   const busy = new Set<string>()
   const contrib = (path: string) => {
     let n = 0
-    for (const { node } of byPath.get(path) ?? []) n += num(evalNode(node))
+    for (const { node } of byPath.get(path) ?? []) n += num(evalNode(node, read))
     return n
   }
   const stat = (layer: string, k: string): number => {
@@ -147,60 +193,26 @@ export function evaluatePassives({ sheets, inputs, base, own }: PassiveInput) {
       v = stat(path[0], path[1])
     else
       for (const { node } of byPath.get(key) ?? []) {
-        const x = evalNode(node)
+        const x = evalNode(node, read)
         v = typeof x === 'number' ? num(v) + x : (v ?? x) // strings (nonStacking, infusion): first one wins
       }
     busy.delete(key)
     memo.set(key, v)
     return v
   }
-  const evalNode = (n: GoNode): Value => {
-    const o = n.operands
-    switch (n.operation) {
-      case 'const':
-        return n.value
-      case 'read':
-        return read(n.path!)
-      case 'add':
-        return o.reduce((s, x) => s + num(evalNode(x)), 0)
-      case 'mul':
-        return o.reduce((s, x) => s * num(evalNode(x)), 1)
-      case 'min':
-        return Math.min(...o.map((x) => num(evalNode(x))))
-      case 'max':
-        return Math.max(...o.map((x) => num(evalNode(x))))
-      case 'sum_frac': {
-        const [a, b] = o.map((x) => num(evalNode(x)))
-        return a / (a + b)
-      }
-      case 'threshold':
-        return num(evalNode(o[0])) >= num(evalNode(o[1])) ? evalNode(o[2]) : evalNode(o[3])
-      case 'match':
-        return evalNode(o[0]) === evalNode(o[1]) ? evalNode(o[2]) : o[3] && evalNode(o[3])
-      case 'subscript':
-        return n.list![num(evalNode(o[0]))]
-      case 'lookup': {
-        const hit = n.table![String(evalNode(o[0]))]
-        return hit ? evalNode(hit) : o[1] && evalNode(o[1])
-      }
-      default:
-        throw new Error(`unsupported GO operation ${n.operation}`)
-    }
-  }
-
   const buffs: Buff[] = []
   for (const [path, list] of byPath) {
     const m = path.match(/^(premod|total)\.(\w+)$/)
     const b = m && buffOf(m[2])
     if (!b) continue
     for (const { source, node } of list) {
-      const v = num(evalNode(node))
+      const v = num(evalNode(node, read))
       // a total-layer % stat would be read as premod by ysin-ng; GO only uses flat ones there
       if (v) buffs.push({ key: b.key, on: b.on, value: b.sign ? -v : v, source })
     }
   }
   const infusion = read(['infusion', 'nonOverridableSelf']) ?? read(['infusion', 'overridableSelf'])
-  return { buffs, infusion: typeof infusion === 'string' && infusion !== '' }
+  return { buffs, infusion: typeof infusion === 'string' && infusion !== '', read }
 }
 
 const num = (v: Value) => (typeof v === 'number' && !Number.isNaN(v) ? v : 0)

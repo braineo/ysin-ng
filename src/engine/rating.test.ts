@@ -8,7 +8,7 @@ import { critLoss, rate } from './rating'
 const char = character('hu-tao|en')!
 const weapon = weapons('polearm|en').find((w) => w.name === 'Staff of Homa')!
 const sets = artifactSets('en')
-const build: Build = { ...defaultBuild(char), reaction: 'vaporize', focus: 'normal.6.0' }
+const build: Build = { ...defaultBuild(char), reaction: 'vaporize', focus: 'charged.dmg' }
 
 describe('artifact rating', () => {
   test('crit loss is zero at 1:2 and counts wasted CRIT Rate', () => {

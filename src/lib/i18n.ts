@@ -147,7 +147,7 @@ const en = {
   shield: 'Shield',
   lunarNote: 'Lunar reactions are not modeled yet',
   transformative: 'Transformative reactions',
-  customBuffs: 'Buffs from kit, weapon & team',
+  customBuffs: 'Team & other buffs',
   customHint: 'Team buffs and anything the passives above do not cover.',
   passives: 'Passives, constellations & sets',
   passivesHint:
@@ -363,7 +363,7 @@ const zh: Record<MessageKey, string> = {
   shield: '护盾',
   lunarNote: '月反应暂未建模',
   transformative: '剧变反应',
-  customBuffs: '天赋、武器与队伍增益',
+  customBuffs: '队伍与其他增益',
   customHint: '队伍增益，以及上方被动未涵盖的效果。',
   passives: '天赋、命座与套装',
   passivesHint: '公式来自 Genshin Optimizer。条件效果默认关闭，请开启适用的效果。',

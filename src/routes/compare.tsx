@@ -236,7 +236,7 @@ function Compare() {
                       <TableRow key={r.id}>
                         <TableCell className="whitespace-normal">
                           <span className={ELEMENT_TEXT[r.element]}>●</span> {r.label}
-                          <span className="ml-1 text-xs text-muted-foreground">{r.talent}</span>
+                          <span className="ml-1 text-xs text-muted-foreground">{r.group}</span>
                         </TableCell>
                         {entries.map((e) => {
                           const v = e.result.rows.find((x) => x.id === r.id)?.avg ?? 0
