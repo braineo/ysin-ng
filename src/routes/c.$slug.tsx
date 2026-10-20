@@ -8,10 +8,10 @@ import { Results } from '#/components/calculator/results'
 import { SaveBar } from '#/components/calculator/save-bar'
 import { ELEMENT_BG, GameIcon } from '#/components/game-icon'
 import { Badge } from '#/components/ui/badge'
-import { calculate, defaultBuild, focusRow, type Build } from '#/engine/calc'
+import { calculate, defaultLoadout, focusRow, type Build } from '#/engine/calc'
 import { rate } from '#/engine/rating'
 import type { ArtifactSetData, CharacterData, WeaponData } from '#/engine/types'
-import { useT } from '#/lib/i18n'
+import { useLang, useT } from '#/lib/i18n'
 import {
   clearDraft,
   getBuilds,
@@ -22,17 +22,21 @@ import {
   type Draft,
   type SavedBuild,
 } from '#/lib/store'
+import { useTeam } from '#/lib/team'
 import { cn } from '#/lib/utils'
-import { getCalculatorData } from '#/server/fns'
+import { getCalculatorData, getRoster } from '#/server/fns'
 
 export const Route = createFileRoute('/c/$slug')({
   validateSearch: (s: Record<string, unknown>): { build?: string } =>
     typeof s.build === 'string' ? { build: s.build } : {},
   loaderDeps: ({ search }) => ({ lang: search.lang ?? ('en' as const) }),
   loader: async ({ params, deps }) => {
-    const data = await getCalculatorData({ data: { slug: params.slug, lang: deps.lang } })
+    const [data, roster] = await Promise.all([
+      getCalculatorData({ data: { slug: params.slug, lang: deps.lang } }),
+      getRoster({ data: { lang: deps.lang } }),
+    ])
     if (!data) throw notFound()
-    return data
+    return { ...data, roster }
   },
   head: ({ loaderData }) => ({ meta: [{ title: `${loaderData?.char.name ?? ''} · Ysin NG` }] }),
   // remount per character so build state doesn't leak between characters
@@ -49,25 +53,19 @@ function NotFound() {
   )
 }
 
-/** Sensible starting gear: a crit-stat 5★ weapon and a generic DPS 4-piece. */
 function defaults(
   char: CharacterData,
   weapons: WeaponData[],
   sets: ArtifactSetData[],
   name: string,
 ): Draft {
-  const weapon =
-    weapons.find((w) => w.rarity === 5 && (w.mainStat === 'cr' || w.mainStat === 'cd')) ??
-    weapons[0]
-  const melee = char.weapon !== 'bow' && char.weapon !== 'catalyst'
-  const set = sets.find((s) => s.goKey === (melee ? 'GladiatorsFinale' : 'WanderersTroupe'))
-  const build = defaultBuild(char)
-  build.sets = [set?.id ?? null, null]
+  const { build, weapon } = defaultLoadout(char, weapons, sets)
   return { build, weaponId: weapon?.id ?? null, name }
 }
 
 function Calculator() {
-  const { char, weapons, sets } = Route.useLoaderData()
+  const { char, weapons, sets, roster } = Route.useLoaderData()
+  const lang = useLang()
   const search = Route.useSearch()
   const navigate = useNavigate()
   const t = useT()
@@ -115,8 +113,15 @@ function Calculator() {
 
   const { build } = state
   const weapon = weapons.find((w) => w.id === state.weaponId) ?? null
-  const result = useMemo(() => calculate(char, weapon, sets, build), [char, weapon, sets, build])
-  const rating = useMemo(() => rate(char, weapon, sets, build), [char, weapon, sets, build])
+  const team = useTeam(build.team, lang)
+  const result = useMemo(
+    () => calculate(char, weapon, sets, build, team),
+    [char, weapon, sets, build, team],
+  )
+  const rating = useMemo(
+    () => rate(char, weapon, sets, build, team),
+    [char, weapon, sets, build, team],
+  )
   const patch = (p: Partial<Build>) => setState((s) => ({ ...s, build: { ...s.build, ...p } }))
 
   function save(asNew: boolean) {
@@ -205,6 +210,7 @@ function Calculator() {
             build={build}
             weapon={weapon}
             passives={result.passives}
+            roster={roster}
             onBuild={patch}
             onWeapon={(weaponId) => setState((s) => ({ ...s, weaponId }))}
           />
@@ -214,6 +220,7 @@ function Calculator() {
             sets={sets}
             build={build}
             rows={result.rows}
+            team={team}
             onApply={patch}
           />
         </div>

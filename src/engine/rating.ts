@@ -1,4 +1,11 @@
-import { calculate, defaultBuild, focusRow, type ArtifactSlot, type Build } from './calc'
+import {
+  calculate,
+  defaultBuild,
+  focusRow,
+  type ArtifactSlot,
+  type Build,
+  type TeamMate,
+} from './calc'
 import { climb } from './optimize'
 import { CIRCLET, GOBLET, SANDS, SUB_KEYS, SUB_ROLL, type MainKey, type SubKey } from './tables'
 import type { ArtifactSetData, CharacterData, WeaponData } from './types'
@@ -93,12 +100,13 @@ export function rate(
   weapon: WeaponData | null,
   sets: ArtifactSetData[],
   build: Build,
+  team: TeamMate[] = [],
 ): Rating | null {
-  const now = calculate(char, weapon, sets, build)
+  const now = calculate(char, weapon, sets, build, team)
   const target = focusRow(now.rows, build.focus)
   if (!target || target.kind === 'lunar' || !target.avg) return null
   const evaluate = (b: Build) => {
-    const r = calculate(char, weapon, sets, b)
+    const r = calculate(char, weapon, sets, b, team)
     return { v: r.rows.find((x) => x.id === target.id)?.avg ?? 0, er: r.panel.er }
   }
   const value = (b: Build) => evaluate(b).v

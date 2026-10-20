@@ -64,7 +64,7 @@ function prune(data: Record<string, unknown>, rows: GoNode[] = []): GoSheet {
       } else if (
         v &&
         typeof v === 'object' &&
-        ['premod', 'total', 'teamBuff', 'nonStacking', 'infusion', 'tally'].includes(k)
+        ['premod', 'total', 'teamBuff', 'nonStacking', 'infusion', 'tally', 'flags'].includes(k)
       )
         visit(v, `${path}.`)
     }
@@ -344,6 +344,13 @@ async function collect(
   }
   return out
 }
+/** elemental resonance: team buffs of a full party, toggles labelled from GO's resonance sheets */
+async function resonance() {
+  const s = prune(sheets.resonanceData)
+  s.labels = await labels(sheets.resonanceSheets, s.conds, () => ({}))
+  return s
+}
+
 const sha = execFileSync('git', ['-C', GO, 'rev-parse', 'HEAD']).toString().trim()
 const out = {
   source: `https://github.com/frzyc/genshin-optimizer/tree/${sha}`,
@@ -351,6 +358,7 @@ const out = {
   chars: await collect(consts.allCharacterKeys, (k) => sheets.getCharSheet(k, 'F'), 'char'),
   weapons: await collect(consts.allWeaponKeys, (k) => sheets.getWeaponSheet(k), 'weapon'),
   sets: await collect(consts.allArtifactSetKeys, (k) => sheets.getArtSheet(k), 'set'),
+  resonance: await resonance(),
 }
 // --- data.json --------------------------------------------------------------------------------
 const { allStats } = await import(join(GO, 'libs/gi/stats/src/index.ts'))

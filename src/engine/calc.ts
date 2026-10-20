@@ -1,11 +1,13 @@
 import {
   buffOf,
   evalNode,
-  evaluatePassives,
+  evaluateTeam,
+  teamConds,
   type GoLabel,
   type GoMove,
   type GoNode,
   type GoSheet,
+  type Member,
   type Reader,
 } from './passives'
 import {
@@ -50,6 +52,8 @@ export type Build = {
   enemyLevel: number
   enemyRes: number
   custom: Buff[]
+  /** teammates (up to 3): a saved build of theirs, or their default build */
+  team?: { slug: string; savedId?: string }[]
   /** passive toggles by GO id ("HuTao.SanguineRouge") → state; unset or '' = off, as in GO */
   conds?: Record<string, string>
   /** id of the result row the optimizer and comparison target (default: highest average damage) */
@@ -143,6 +147,23 @@ export function defaultBuild(char: CharacterData): Build {
   }
 }
 
+/** Sensible starting gear: a crit-stat 5★ weapon and a generic DPS 4-piece. */
+export function defaultLoadout(
+  char: CharacterData,
+  weapons: WeaponData[],
+  sets: ArtifactSetData[],
+) {
+  const weapon =
+    weapons.find((w) => w.rarity === 5 && (w.mainStat === 'cr' || w.mainStat === 'cd')) ??
+    weapons[0] ??
+    null
+  const melee = char.weapon !== 'bow' && char.weapon !== 'catalyst'
+  const set = sets.find((s) => s.goKey === (melee ? 'GladiatorsFinale' : 'WanderersTroupe'))
+  const build = defaultBuild(char)
+  build.sets = [set?.id ?? null, null]
+  return { build, weapon }
+}
+
 /** Most common scaling stat across skill and burst damage rows. */
 export function scalingStat(char: CharacterData): ScalingStat {
   const count: Record<ScalingStat, number> = { atk: 0, hp: 0, def: 0, em: 0 }
@@ -186,11 +207,18 @@ function baseStats(char: CharacterData, weapon: WeaponData | null, build: Build)
   return { hp: st.hp, atk: st.atk + wAtk, def: st.def }
 }
 
-export function collectBuffs(
+/** A teammate as the engine sees it: character, weapon and build. */
+export type TeamMate = { char: CharacterData; weapon: WeaponData | null; build: Build }
+type Sheet = { source: string; note: string; sheet: GoSheet }
+
+/** One character's own buffs, GO sheets and GO inputs; `conds` are the team-wide toggles. */
+function memberOf(
   char: CharacterData,
   weapon: WeaponData | null,
   sets: ArtifactSetData[],
   build: Build,
+  conds: Build['conds'],
+  active: CharacterData,
 ) {
   const st = char.stats[build.level] ?? char.stats['90']
   const buffs: Buff[] = [
@@ -222,29 +250,16 @@ export function collectBuffs(
       note: e.pieces === 4 ? `${e.set.twoPc} ${e.set.fourPc}` : e.set.twoPc,
       sheet: e.set.passives,
     })),
-  ].filter((s): s is { source: string; note: string; sheet: GoSheet } => !!s.sheet)
-  const toggles = sheets.map(({ sheet }) =>
-    Object.entries(sheet.conds).map(([id, states]): Toggle => ({
-      id,
-      states,
-      value: build.conds?.[id] ?? '',
-      labels: { en: sheet.labels?.en[id], zh: sheet.labels?.zh[id] },
-    })),
-  )
+  ].filter((s): s is Sheet => !!s.sheet)
   const talent = (t: 'normal' | 'skill' | 'burst') => talentLevel(char, build, t) - 1
   const plain = buffs.filter((b) => !b.from)
-  const go = evaluatePassives({
-    sheets,
+  const member = (list: Sheet[]): Member => ({
+    sheets: list,
     inputs: {
       charKey: char.goKey,
       charEle: char.element,
       weaponType: char.weapon,
-      activeCharKey: char.goKey,
-      'target.charKey': char.goKey,
-      'target.charEle': char.element,
-      'target.weaponType': char.weapon,
-      'active.charKey': char.goKey,
-      'active.charEle': char.element,
+      activeCharKey: active.goKey,
       lvl: Number.parseInt(build.level),
       asc: Math.min(Math.floor(LEVEL_KEYS.indexOf(build.level) / 2), 6),
       constellation: build.cons,
@@ -255,7 +270,7 @@ export function collectBuffs(
       'total.burstIndex': talent('burst'),
       ...Object.fromEntries(equipped.map((e) => [`artSet.${e.set.goKey}`, e.pieces])),
       ...Object.fromEntries(
-        toggles.flat().map((t) => [`conditional.${t.id}`, t.value || undefined]),
+        Object.entries(conds ?? {}).map(([id, v]) => [`conditional.${id}`, v || undefined]),
       ),
     },
     base: baseStats(char, weapon, build),
@@ -264,13 +279,59 @@ export function collectBuffs(
       return b ? sum(plain, b.key, b.on) : 0
     },
   })
-  const passives = sheets.map(({ source, note }, i): PassiveSource => ({
-    source,
-    note,
-    toggles: toggles[i],
-    buffs: go.buffs.filter((b) => b.source === source),
-  }))
-  return { buffs: [...buffs, ...go.buffs], passives, infusion: go.infusion, read: go.read }
+  return { buffs, sheets, member }
+}
+
+const toggle =
+  (sheet: GoSheet, conds: Build['conds']) =>
+  ([id, states]: [string, string[]]): Toggle => ({
+    id,
+    states,
+    value: conds?.[id] ?? '',
+    labels: { en: sheet.labels?.en[id], zh: sheet.labels?.zh[id] },
+  })
+
+export function collectBuffs(
+  char: CharacterData,
+  weapon: WeaponData | null,
+  sets: ArtifactSetData[],
+  build: Build,
+  team: TeamMate[] = [],
+) {
+  const own = memberOf(char, weapon, sets, build, build.conds, char)
+  // resonance needs a full party; its formulas check the team size themselves
+  const resonance: Sheet[] =
+    char.resonance && team.length === 3
+      ? [{ source: char.resonance.name, note: '', sheet: char.resonance.sheet }]
+      : []
+  // teammates' sheet names are prefixed, so two members with the same weapon or set stay apart
+  const mates = team.map((m) => {
+    const x = memberOf(m.char, m.weapon, sets, m.build, build.conds, char)
+    const sheets = x.sheets.map((s) => ({
+      ...s,
+      source: s.source === m.char.name ? s.source : `${m.char.name} · ${s.source}`,
+    }))
+    return { sheets, member: x.member(sheets) }
+  })
+  const go = evaluateTeam(
+    own.member([...own.sheets, ...resonance]),
+    mates.map((m) => m.member),
+  )
+  const sources = (list: Sheet[], filter?: (id: string, sheet: GoSheet) => boolean) =>
+    list.map(({ source, note, sheet }): PassiveSource => ({
+      source,
+      note,
+      toggles: Object.entries(sheet.conds)
+        .filter(([id]) => !filter || filter(id, sheet))
+        .map(toggle(sheet, build.conds)),
+      buffs: go.buffs.filter((b) => b.source === source),
+    }))
+  const passives = [
+    ...sources([...own.sheets, ...resonance]),
+    // a teammate's toggles only matter where they drive a team buff
+    ...mates.flatMap((m) => sources(m.sheets, (id, sheet) => teamConds(sheet).has(id))),
+  ]
+  return { buffs: [...own.buffs, ...go.buffs], passives, infusion: go.infusion, read: go.read }
 }
 
 export function buildPanel(
@@ -517,8 +578,9 @@ export function calculate(
   weapon: WeaponData | null,
   sets: ArtifactSetData[],
   build: Build,
+  team: TeamMate[] = [],
 ) {
-  const { buffs, passives, read } = collectBuffs(char, weapon, sets, build)
+  const { buffs, passives, read } = collectBuffs(char, weapon, sets, build, team)
   const panel = buildPanel(char, weapon, buffs, build)
   return {
     panel,

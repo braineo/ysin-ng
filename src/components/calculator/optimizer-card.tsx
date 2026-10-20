@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '#/components/ui/table'
-import { focusRow, type Build, type HitResult } from '#/engine/calc'
+import { focusRow, type Build, type HitResult, type TeamMate } from '#/engine/calc'
 import { optimize, type OptimizeResult } from '#/engine/optimize'
 import { SUB_KEYS } from '#/engine/tables'
 import type { ArtifactSetData, CharacterData, Element, WeaponData } from '#/engine/types'
@@ -33,10 +33,11 @@ type Props = {
   sets: ArtifactSetData[]
   build: Build
   rows: (HitResult & { talent: string })[]
+  team: TeamMate[]
   onApply: (patch: Partial<Build>) => void
 }
 
-export function OptimizerCard({ char, weapon, sets, build, rows, onApply }: Props) {
+export function OptimizerCard({ char, weapon, sets, build, rows, team, onApply }: Props) {
   const t = useT()
   const fmt = useFmt()
   const currentTotal = Math.round(SUB_KEYS.reduce((s, k) => s + build.rolls[k], 0))
@@ -58,6 +59,7 @@ export function OptimizerCard({ char, weapon, sets, build, rows, onApply }: Prop
       build,
       { total, minEr: minEr / 100, tryMains },
       (done, all) => setProgress([done, all]),
+      team,
     )
     setProgress(null)
     setResult(found ?? 'none')

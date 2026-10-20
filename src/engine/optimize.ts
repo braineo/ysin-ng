@@ -1,4 +1,4 @@
-import { calculate, focusRow, type Build } from './calc'
+import { calculate, focusRow, type Build, type TeamMate } from './calc'
 import { CIRCLET, GOBLET, SANDS, SUB_KEYS, type SubKey } from './tables'
 import type { ArtifactSetData, CharacterData, WeaponData } from './types'
 
@@ -38,15 +38,16 @@ export async function optimize(
   build: Build,
   opts: OptimizeOptions,
   onProgress?: (done: number, total: number) => void,
+  team: TeamMate[] = [],
 ): Promise<OptimizeResult | null> {
   let evaluated = 0
   const value = (b: Build) => {
     evaluated++
-    const r = calculate(char, weapon, sets, b)
+    const r = calculate(char, weapon, sets, b, team)
     return { v: focusRow(r.rows, b.focus)?.avg ?? 0, er: r.panel.er }
   }
   const before = value(build).v
-  const target = focusRow(calculate(char, weapon, sets, build).rows, build.focus)
+  const target = focusRow(calculate(char, weapon, sets, build, team).rows, build.focus)
   const focus = build.focus ?? target?.id
 
   const combos: Mains[] = []

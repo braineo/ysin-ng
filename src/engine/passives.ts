@@ -94,7 +94,7 @@ export function buffOf(goKey: string): { key: BuffKey; on?: Buff['on']; sign?: -
 /** Output paths the evaluator reads or turns into buffs; the generator drops everything else. */
 export function keepPath(path: string) {
   const p = path.replace(/^teamBuff\./, '')
-  if (/^(nonStacking|infusion|tally)\./.test(p)) return true
+  if (/^(nonStacking|infusion|tally|flags)\./.test(p)) return true
   const m = p.match(/^(premod|total)\.(\w+)$/)
   return !!m && !!buffOf(m[2])
 }
@@ -146,24 +146,33 @@ export function evalNode(n: GoNode, read: Reader): Value {
   }
 }
 
-export type PassiveInput = {
-  /** sheets in play: character, weapon, equipped sets */
+/** One team member as the formulas see it. */
+export type Member = {
+  /** sheets in play: character, weapon, equipped sets (and resonance, for the active character) */
   sheets: { source: string; sheet: GoSheet }[]
-  /** GO input paths: "constellation", "weapon.refinement", "conditional.HuTao.X", "artSet.X", ... */
+  /** GO input paths: "charKey", "constellation", "weapon.refinement", "conditional.HuTao.X", "artSet.X", ... */
   inputs: Record<string, Value>
   base: { hp: number; atk: number; def: number }
-  /** the build's own (non-GO) contribution to a GO stat key, without the 5% CR / 50% CD / 100% ER base */
+  /** the member's own (non-GO) contribution to a GO stat key, without the 5% CR / 50% CD / 100% ER base */
   own: (goKey: string) => number
 }
 
 const BASE_STAT: Record<string, number> = { critRate_: 0.05, critDMG_: 0.5, enerRech_: 1 }
+/** paths whose value is a property of the whole team, not of one member */
+const TEAM_PATH = /^(tally|nonStacking)\.|^infusion\.team$/
 
-export function evaluatePassives({ sheets, inputs, base, own }: PassiveInput) {
-  const byPath = new Map<string, { source: string; node: GoNode }[]>()
-  for (const { source, sheet } of sheets)
+/**
+ * One member's formula context. `shared` holds team-wide values (tally, nonStacking); `target`
+ * resolves `target.*` reads, i.e. the character a team buff lands on (default: this member).
+ */
+function context(m: Member, shared: Record<string, Value>, target?: Reader) {
+  // GO's teamBuff.* formulas reach every member, the provider included; the rest only the provider
+  const byPath = new Map<string, { source: string; node: GoNode; team: boolean }[]>()
+  for (const { source, sheet } of m.sheets)
     for (const [path, node] of Object.entries(sheet.nodes)) {
-      const p = path.replace(/^teamBuff\./, '') // solo: team buffs reach the wearer too
-      byPath.set(p, [...(byPath.get(p) ?? []), { source, node }])
+      const team = path.startsWith('teamBuff.')
+      const p = team ? path.slice(9) : path
+      byPath.set(p, [...(byPath.get(p) ?? []), { source, node, team }])
     }
   const memo = new Map<string, Value>()
   const busy = new Set<string>()
@@ -173,18 +182,22 @@ export function evaluatePassives({ sheets, inputs, base, own }: PassiveInput) {
     return n
   }
   const stat = (layer: string, k: string): number => {
-    if (layer === 'base') return base[k as keyof typeof base] ?? 0
+    if (layer === 'base') return m.base[k as keyof Member['base']] ?? 0
     if (k === 'hp' || k === 'atk' || k === 'def') {
-      const b = base[k]
-      const pre = b * (1 + own(`${k}_`) + contrib(`premod.${k}_`)) + own(k) + contrib(`premod.${k}`)
+      const b = m.base[k]
+      const pre =
+        b * (1 + m.own(`${k}_`) + contrib(`premod.${k}_`)) + m.own(k) + contrib(`premod.${k}`)
       return layer === 'premod' ? pre : pre + b * contrib(`total.${k}_`) + contrib(`total.${k}`)
     }
-    const pre = (BASE_STAT[k] ?? 0) + own(k) + contrib(`premod.${k}`)
+    const pre = (BASE_STAT[k] ?? 0) + m.own(k) + contrib(`premod.${k}`)
     return layer === 'premod' ? pre : pre + contrib(`total.${k}`)
   }
-  const read = (path: string[]): Value => {
+  const read: Reader = (path) => {
     const key = path.join('.')
-    if (key in inputs) return inputs[key]
+    if (key in m.inputs) return m.inputs[key]
+    if (key in shared) return shared[key]
+    // the receiving character; on its own sheets that is the member itself
+    if (path[0] === 'target' || path[0] === 'active') return (target ?? read)(path.slice(1))
     if (memo.has(key)) return memo.get(key)
     if (busy.has(key)) return undefined // GO sheets never loop; this only guards bad data
     busy.add(key)
@@ -200,19 +213,78 @@ export function evaluatePassives({ sheets, inputs, base, own }: PassiveInput) {
     memo.set(key, v)
     return v
   }
-  const buffs: Buff[] = []
-  for (const [path, list] of byPath) {
-    const m = path.match(/^(premod|total)\.(\w+)$/)
-    const b = m && buffOf(m[2])
-    if (!b) continue
-    for (const { source, node } of list) {
-      const v = num(evalNode(node, read))
-      // a total-layer % stat would be read as premod by ysin-ng; GO only uses flat ones there
-      if (v) buffs.push({ key: b.key, on: b.on, value: b.sign ? -v : v, source })
+  /** stat contributions as buffs; `teamOnly`: just the ones this member gives the team */
+  const buffs = (teamOnly: boolean) => {
+    const out: Buff[] = []
+    for (const [path, list] of byPath) {
+      const p = path.match(/^(premod|total)\.(\w+)$/)
+      const b = p && buffOf(p[2])
+      if (!b) continue
+      for (const { source, node, team } of list) {
+        if (teamOnly && !team) continue
+        const v = num(evalNode(node, read))
+        // a total-layer % stat would be read as premod by ysin-ng; GO only uses flat ones there
+        if (v) out.push({ key: b.key, on: b.on, value: b.sign ? -v : v, source })
+      }
+    }
+    return out
+  }
+  return { read, buffs, paths: () => byPath.keys() }
+}
+
+/** A GO stat key summed over buffs, the way `Member.own` reports it. */
+export function sumGo(buffs: Buff[], goKey: string) {
+  const b = buffOf(goKey)
+  return b
+    ? buffs.reduce((s, x) => (x.key === b.key && x.on === b.on && !x.from ? s + x.value : s), 0)
+    : 0
+}
+
+/**
+ * Passives for the active character with its teammates: own formulas, every member's team buffs
+ * (evaluated with the provider's stats) and the team-wide tallies they depend on.
+ */
+export function evaluateTeam(active: Member, mates: Member[] = []) {
+  // team-wide values: element / region counts add up, the highest EM wins, non-stacking buffs go to the first provider
+  const shared: Record<string, Value> = {}
+  for (const m of [active, ...mates]) {
+    const c = context(m, {})
+    for (const key of c.paths()) {
+      if (!TEAM_PATH.test(key) || (key === 'infusion.team' && m === active)) continue
+      const v = c.read(key.split('.'))
+      if (typeof v === 'number')
+        shared[key] =
+          key === 'tally.maxEleMas' ? Math.max(num(shared[key]), v) : num(shared[key]) + v
+      else if (v !== undefined && v !== '' && shared[key] === undefined) shared[key] = v
     }
   }
-  const infusion = read(['infusion', 'nonOverridableSelf']) ?? read(['infusion', 'overridableSelf'])
-  return { buffs, infusion: typeof infusion === 'string' && infusion !== '', read }
+  // teammates' buffs read their own stats; `target.*` is the active character as it stands without them
+  // shortcut: teammates' stats ignore buffs from each other, which matters for few team buffs
+  const before = context(active, shared)
+  const given = mates.flatMap((m) => context(m, shared, before.read).buffs(true))
+  const self = context({ ...active, own: (k) => active.own(k) + sumGo(given, k) }, shared)
+  const infusion =
+    self.read(['infusion', 'nonOverridableSelf']) ??
+    self.read(['infusion', 'team']) ??
+    self.read(['infusion', 'overridableSelf'])
+  return {
+    buffs: [...self.buffs(false), ...given],
+    infusion: typeof infusion === 'string' && infusion !== '',
+    read: self.read,
+  }
+}
+
+/** Toggles a sheet's team buffs depend on (all of them for the active character's own sheets). */
+export function teamConds(sheet: GoSheet) {
+  const ids = new Set<string>()
+  const walk = (n: GoNode) => {
+    if (n.operation === 'read' && n.path![0] === 'conditional') ids.add(n.path!.slice(1).join('.'))
+    n.operands.forEach(walk)
+    for (const t of Object.values(n.table ?? {})) walk(t)
+  }
+  for (const [path, node] of Object.entries(sheet.nodes))
+    if (path.startsWith('teamBuff.')) walk(node)
+  return ids
 }
 
 const num = (v: Value) => (typeof v === 'number' && !Number.isNaN(v) ? v : 0)

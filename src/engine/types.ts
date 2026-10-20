@@ -79,6 +79,8 @@ export type CharacterData = {
   /** Genshin Optimizer key ("HuTao") and passives / constellations */
   goKey: string
   passives?: GoSheet
+  /** GO's elemental resonance, named in the page's language */
+  resonance?: { name: string; sheet: GoSheet }
 }
 
 export type WeaponData = {

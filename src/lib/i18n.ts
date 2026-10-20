@@ -149,6 +149,12 @@ const en = {
   transformative: 'Transformative reactions',
   customBuffs: 'Team & other buffs',
   customHint: 'Team buffs and anything the passives above do not cover.',
+  team: 'Team',
+  teamHint:
+    "Teammates' buffs land on this character: pick one of their saved builds or their default build, then switch on their effects below. Resonance needs a full party of four.",
+  teammate: 'Teammate',
+  teammateBuild: 'Their build',
+  defaultBuild: 'Default build',
   passives: 'Passives, constellations & sets',
   passivesHint:
     'Formulas from Genshin Optimizer. Conditional effects start off; switch on what applies.',
@@ -366,6 +372,12 @@ const zh: Record<MessageKey, string> = {
   transformative: '剧变反应',
   customBuffs: '队伍与其他增益',
   customHint: '队伍增益，以及上方被动未涵盖的效果。',
+  team: '队伍',
+  teamHint:
+    '队友的增益作用于当前角色：选择其已保存的配置或默认配置，再在下方开启对应效果。元素共鸣需要满编四人。',
+  teammate: '队友',
+  teammateBuild: '队友配置',
+  defaultBuild: '默认配置',
   passives: '天赋、命座与套装',
   passivesHint: '公式来自 Genshin Optimizer。条件效果默认关闭，请开启适用的效果。',
   off: '关',

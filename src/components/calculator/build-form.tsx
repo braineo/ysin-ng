@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react'
 import { BuffEditor } from '#/components/buff-editor'
 import { Field, SelectField, numOptions, type Option } from '#/components/field'
 import { GameIcon, IconLabel } from '#/components/game-icon'
@@ -18,6 +19,7 @@ import type { ArtifactSetData, CharacterData, WeaponData } from '#/engine/types'
 import { useT } from '#/lib/i18n'
 import { cn } from '#/lib/utils'
 import { PassivesCard } from './passives-card'
+import { TeamCard } from './team-card'
 
 type Props = {
   char: CharacterData
@@ -26,6 +28,7 @@ type Props = {
   build: Build
   weapon: WeaponData | null
   passives: PassiveSource[]
+  roster: ComponentProps<typeof TeamCard>['roster']
   onBuild: (patch: Partial<Build>) => void
   onWeapon: (id: number) => void
 }
@@ -39,6 +42,7 @@ export function BuildForm({
   build,
   weapon,
   passives,
+  roster,
   onBuild,
   onWeapon,
 }: Props) {
@@ -292,6 +296,8 @@ export function BuildForm({
           )}
         </CardContent>
       </Card>
+
+      <TeamCard slug={char.slug} roster={roster} build={build} onBuild={onBuild} />
 
       <PassivesCard passives={passives} build={build} onBuild={onBuild} />
 
