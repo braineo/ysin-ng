@@ -42,7 +42,8 @@ const reads = (n: GoNode, out: Set<string>) => {
   return out
 }
 
-const helper = (p: string) => /^(teamBuff\.)?(tally|nonStacking)\./.test(p)
+// tally (element / region counts) is read by other members' and resonance formulas, so it always stays
+const helper = (p: string) => /^(teamBuff\.)?nonStacking\./.test(p)
 const isCond = (x?: GoNode) => x?.operation === 'read' && x.path![0] === 'conditional'
 
 /**
@@ -64,13 +65,13 @@ function prune(data: Record<string, unknown>, rows: GoNode[] = []): GoSheet {
       } else if (
         v &&
         typeof v === 'object' &&
-        ['premod', 'total', 'teamBuff', 'nonStacking', 'infusion', 'tally'].includes(k)
+        ['premod', 'total', 'teamBuff', 'nonStacking', 'infusion', 'tally', 'flags'].includes(k)
       )
         visit(v, `${path}.`)
     }
   }
   visit(data, '')
-  // helper paths (tally, nonStacking) only matter when a stat node reads them, e.g. lunar-only ones don't
+  // nonStacking paths only matter when a stat node reads them, e.g. lunar-only ones don't
   const needed = new Set<string>()
   const queue = Object.keys(nodes).filter((p) => !helper(p))
   const follow = (n: GoNode) => {
@@ -344,6 +345,13 @@ async function collect(
   }
   return out
 }
+/** elemental resonance: team buffs of a full party, toggles labelled from GO's resonance sheets */
+async function resonance() {
+  const s = prune(sheets.resonanceData)
+  s.labels = await labels(sheets.resonanceSheets, s.conds, () => ({}))
+  return s
+}
+
 const sha = execFileSync('git', ['-C', GO, 'rev-parse', 'HEAD']).toString().trim()
 const out = {
   source: `https://github.com/frzyc/genshin-optimizer/tree/${sha}`,
@@ -351,6 +359,7 @@ const out = {
   chars: await collect(consts.allCharacterKeys, (k) => sheets.getCharSheet(k, 'F'), 'char'),
   weapons: await collect(consts.allWeaponKeys, (k) => sheets.getWeaponSheet(k), 'weapon'),
   sets: await collect(consts.allArtifactSetKeys, (k) => sheets.getArtSheet(k), 'set'),
+  resonance: await resonance(),
 }
 // --- data.json --------------------------------------------------------------------------------
 const { allStats } = await import(join(GO, 'libs/gi/stats/src/index.ts'))

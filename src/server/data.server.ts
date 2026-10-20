@@ -15,7 +15,13 @@ import goData from './data.gen.json'
 import type { GoData } from './go-types'
 
 const DATA = goData as unknown as GoData
-const SHEETS = passives as unknown as Record<'chars' | 'weapons' | 'sets', Record<string, GoSheet>>
+const SHEETS = passives as unknown as Record<
+  'chars' | 'weapons' | 'sets',
+  Record<string, GoSheet>
+> & {
+  resonance: GoSheet
+}
+const RESONANCE: GoText = { en: 'Elemental Resonance', zh: '元素共鸣' }
 
 const text = (t: GoText, lang: Lang) => t[lang] || t.en || ''
 /** enka.network's UI mirror first, GO's own copy (jsDelivr, pinned commit) as fallback */
@@ -101,6 +107,7 @@ export const character = memo((key: string): CharacterData | null => {
       group: talentName(m.talent),
     })),
     passives: go && { nodes: go.nodes, conds: go.conds, labels: go.labels },
+    resonance: SHEETS.resonance && { name: text(RESONANCE, lang), sheet: SHEETS.resonance },
   }
 })
 

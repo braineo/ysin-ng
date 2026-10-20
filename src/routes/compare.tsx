@@ -16,6 +16,7 @@ import {
 import { calculate, defaultBuild, focusRow } from '#/engine/calc'
 import { useT } from '#/lib/i18n'
 import { getBuilds } from '#/lib/store'
+import { loadTeam } from '#/lib/team'
 import { cn } from '#/lib/utils'
 import { getCalculatorData } from '#/server/fns'
 
@@ -34,7 +35,8 @@ export const Route = createFileRoute('/compare')({
       slugs.map((slug) => getCalculatorData({ data: { slug, lang: deps.lang } })),
     )
     const bySlug = new Map(slugs.map((s, i) => [s, data[i]]))
-    const entries = builds.flatMap((saved) => {
+    const teams = await Promise.all(builds.map((b) => loadTeam(b.build.team, deps.lang)))
+    const entries = builds.flatMap((saved, i) => {
       const d = bySlug.get(saved.slug)
       if (!d) return []
       const build = { ...defaultBuild(d.char), ...saved.build }
@@ -47,7 +49,7 @@ export const Route = createFileRoute('/compare')({
           char: d.char,
           weapon,
           sets,
-          result: calculate(d.char, weapon, d.sets, build),
+          result: calculate(d.char, weapon, d.sets, build, teams[i]),
           build,
         },
       ]

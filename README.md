@@ -11,6 +11,8 @@ shadcn/ui + Tailwind v4 · oxlint · oxfmt · game data, formulas and translatio
 
 - **Calculator** (`/c/$slug`): stats, every talent hit (non-crit / crit / average), reactions. Star a row to make it the
   build's _target_ for the optimizer and comparisons.
+- **Team**: up to three teammates, each one of their saved builds (or a default build). Their team buffs are worked out
+  from their own stats; element counts, non-stacking buffs and elemental resonance (full party) follow the team.
 - **Saved builds** (`/builds`): stored in this browser only (localStorage, no account or cloud). The calculator also keeps
   a per-character draft, so a reload never loses work. Export / import a JSON file to back up or move builds.
 - **Artifact rating** (`src/engine/rating.ts`, after Ysin): substat score and artifact score against reference
@@ -75,5 +77,5 @@ Transformative = LevelMult × coef × (1 + 16·EM/(EM+2000) + bonus) × RES
 Everything game-specific: base stats by level, talent rows (damage, heal, shield) and their per-hit bonuses, character
 passives and constellations, weapon passives, artifact set effects, toggle labels, names and texts in English and
 Chinese, icon file names and game ids. Toggles start off, as in GO. Where GO has no Chinese label yet, the toggle or row
-takes the Chinese game name of its talent, weapon passive or set. Not modelled yet: team buffs and resonance (no
-teammates), lunar reactions (shown but not calculated).
+takes the Chinese game name of its talent, weapon passive or set. Not modelled yet: lunar reactions (shown but not
+calculated). Teammates' own stats ignore buffs from the other teammates.

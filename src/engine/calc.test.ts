@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { artifactSets, character, weapons } from '#/server/data.server'
-import { buildPanel, calculate, defMult, defaultBuild, resMult, type Build } from './calc'
+import {
+  buildPanel,
+  calculate,
+  defMult,
+  defaultBuild,
+  resMult,
+  type Build,
+  type TeamMate,
+} from './calc'
 import { SUB_KEYS } from './tables'
 import type { CharacterData, TransReaction } from './types'
 
@@ -151,4 +159,59 @@ test('stat conversion buff reads the pre-conversion panel', () => {
   } as Build)
   expect(panel.atk).toBeCloseTo(600)
   expect(panel.buffs[0].from).toBe('hp')
+})
+
+describe('team', () => {
+  const sets = artifactSets('en')
+  const setId = (name: string) => sets.find((s) => s.name === name)!.id
+  const mate = (
+    slug: string,
+    weapon: string,
+    set: string,
+    extra: Partial<Build> = {},
+  ): TeamMate => {
+    const char = character(`${slug}|en`)!
+    const w = weapons(`${char.weapon}|en`).find((x) => x.name === weapon)!
+    return { char, weapon: w, build: { ...defaultBuild(char), sets: [setId(set), null], ...extra } }
+  }
+  const hu = character('hu-tao|en')!
+  const homa = weapons('polearm|en').find((w) => w.name === 'Staff of Homa')!
+  const bennett = mate('bennett', 'Aquila Favonia', 'Noblesse Oblige', { cons: 6 })
+  const kazuha = mate('kaedehara-kazuha', 'Freedom-Sworn', 'Viridescent Venerer')
+  const conds = {
+    'Bennett.activeInArea': 'activeInArea',
+    'KaedeharaKazuha.swirlpyro': 'pyro',
+    'ViridescentVenerer.swirlpyro': 'pyro',
+  }
+  const run = (build: Partial<Build>, team: TeamMate[]) =>
+    calculate(hu, homa, sets, { ...defaultBuild(hu), conds, ...build }, team)
+  const from = (r: ReturnType<typeof run>, source: string) =>
+    r.passives.find((p) => p.source === source)?.buffs ?? []
+  const resonance = (team: TeamMate[]) =>
+    from(run({}, team), 'Elemental Resonance').find((b) => b.key === 'atk%')?.value
+
+  test("Bennett's burst adds his base ATK × (burst lv 12 + C1), read from his own build", () => {
+    const r = run({}, [bennett])
+    const atk = from(r, 'Bennett').find((b) => b.key === 'atk')!.value
+    const base = bennett.char.stats['90'].atk + bennett.weapon!.stats['90'].atk
+    expect(atk / base).toBeCloseTo(1.12 + 0.2, 4)
+    expect(r.panel.atk - run({}, []).panel.atk).toBeCloseTo(atk, 6)
+  })
+
+  test("Kazuha's A4 scales with his own Elemental Mastery", () => {
+    const own = calculate(kazuha.char, kazuha.weapon, sets, kazuha.build).panel.em
+    const pyro = from(run({}, [kazuha]), 'Kaedehara Kazuha').find((b) => b.on === 'pyro')!
+    expect(pyro.value).toBeCloseTo(0.0004 * own, 6)
+  })
+
+  test('two Pyro in a party of four: Fervent Flames +25% ATK, not with three members', () => {
+    const xiangling = mate('xiangling', 'The Catch', 'Emblem of Severed Fate')
+    expect(resonance([bennett, xiangling, kazuha])).toBeCloseTo(0.25, 6)
+    expect(resonance([bennett, kazuha])).toBeUndefined()
+  })
+
+  test('two Viridescent Venerer wearers shred once', () => {
+    const r = run({ sets: [setId('Viridescent Venerer'), null] }, [kazuha])
+    expect(r.panel.buffs.filter((b) => b.key === 'res' && b.on === 'pyro')).toHaveLength(1)
+  })
 })
