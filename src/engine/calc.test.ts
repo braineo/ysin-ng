@@ -202,6 +202,14 @@ describe('team', () => {
     expect(pyro.value).toBeCloseTo(0.0004 * own, 6)
   })
 
+  test('two Pyro in a party of four: Fervent Flames +25% ATK, not with three members', () => {
+    const xiangling = mate('xiangling', 'The Catch', 'Emblem of Severed Fate')
+    const resonance = (team: TeamMate[]) =>
+      from(run({}, team), 'Elemental Resonance').find((b) => b.key === 'atk%')?.value
+    expect(resonance([bennett, xiangling, kazuha])).toBeCloseTo(0.25, 6)
+    expect(resonance([bennett, kazuha])).toBeUndefined()
+  })
+
   test('two Viridescent Venerer wearers shred once', () => {
     const r = run({ sets: [setId('Viridescent Venerer'), null] }, [kazuha])
     expect(r.panel.buffs.filter((b) => b.key === 'res' && b.on === 'pyro')).toHaveLength(1)

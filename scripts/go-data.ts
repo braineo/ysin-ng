@@ -42,7 +42,8 @@ const reads = (n: GoNode, out: Set<string>) => {
   return out
 }
 
-const helper = (p: string) => /^(teamBuff\.)?(tally|nonStacking)\./.test(p)
+// tally (element / region counts) is read by other members' and resonance formulas, so it always stays
+const helper = (p: string) => /^(teamBuff\.)?nonStacking\./.test(p)
 const isCond = (x?: GoNode) => x?.operation === 'read' && x.path![0] === 'conditional'
 
 /**
@@ -70,7 +71,7 @@ function prune(data: Record<string, unknown>, rows: GoNode[] = []): GoSheet {
     }
   }
   visit(data, '')
-  // helper paths (tally, nonStacking) only matter when a stat node reads them, e.g. lunar-only ones don't
+  // nonStacking paths only matter when a stat node reads them, e.g. lunar-only ones don't
   const needed = new Set<string>()
   const queue = Object.keys(nodes).filter((p) => !helper(p))
   const follow = (n: GoNode) => {
