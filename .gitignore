@@ -12,3 +12,4 @@ dist-ssr
 __unconfig*
 todos.json
 src/engine/passives.gen.json
+src/server/data.gen.json

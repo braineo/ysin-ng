@@ -44,7 +44,7 @@ jobs:
         run: yarn install --immutable
       - uses: oven-sh/setup-bun@v2
       - name: Export
-        run: bun scripts/go-data.ts go out/passives.json
+        run: bun scripts/go-data.ts go out
       - uses: actions/upload-artifact@v4
         with:
           name: go-data

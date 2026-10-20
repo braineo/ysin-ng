@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { calculate } from '#/engine/calc'
 import fixture from './__fixtures__/enka-profile.json'
 import { levelKey, toBuild } from './enka.server'
-import { artifactSets, character, slugById, weapons } from './genshin.server'
+import { artifactSets, character, slugById, weapons } from './data.server'
 import { LEVEL_KEYS, SUB_ROLL } from '#/engine/tables'
 
 // Real showcase data (enka.network's documented sample UID), trimmed to two characters.

@@ -102,7 +102,7 @@ function mainBuff(
   return { key, value, source }
 }
 
-/** Ascension / weapon secondary stat. genshin-db gives EM as a number and the rest as fractions. */
+/** Ascension / weapon secondary stat: EM as a number, the rest as fractions. */
 function specBuff(
   stat: StatKey | 'dmg' | null,
   value: number,
@@ -209,7 +209,9 @@ export function collectBuffs(
   ]
   if (weapon) {
     const ws = weapon.stats[build.weaponLevel] ?? weapon.stats['90']
-    buffs.push(...specBuff(weapon.mainStat, ws.spec, char.element, weapon.name))
+    buffs.push(
+      ...specBuff(weapon.mainStat, ws.spec, weapon.mainElement ?? char.element, weapon.name),
+    )
   }
   const equipped = equippedSets(sets, build)
   const sheets = [

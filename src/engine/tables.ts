@@ -20,7 +20,7 @@ export const LEVEL_MULT = [
 // shortcut: table stops at lv90; levels 95/100 reuse the lv90 value until the curve is added.
 export const levelMult = (level: number) => LEVEL_MULT[Math.min(Math.max(level, 1), 90) - 1]
 
-/** Transformative reaction coefficients (current game values per the Genshin wiki, not genshin-db). */
+/** Transformative reaction coefficients (current game values, as in Genshin Optimizer). */
 export const TRANS: Record<TransReaction, { coef: number; element: Element }> = {
   overloaded: { coef: 2.75, element: 'pyro' },
   superconduct: { coef: 1.5, element: 'cryo' },

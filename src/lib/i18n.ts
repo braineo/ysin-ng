@@ -1,7 +1,7 @@
 import { useSearch } from '@tanstack/react-router'
 import type { Lang } from './assets'
 
-// UI strings only: game text (names, talents, passives) comes localized from genshin-db.
+// UI strings only: game text (names, talents, passives) comes localized from Genshin Optimizer's data.
 const en = {
   appName: 'Ysin NG',
   myBuilds: 'My builds',
@@ -160,7 +160,8 @@ const en = {
   scalesFrom: '× of stat',
   remove: 'Remove',
   weaponPassive: 'Weapon passive',
-  imagesNote: 'Images hotlinked from enka.network and the official miHoYo CDN. Data: genshin-db.',
+  imagesNote:
+    'Images hotlinked from enka.network and Genshin Optimizer. Data: Genshin Optimizer (MIT).',
   notFound: 'Character not found',
   back: 'All characters',
   hp: 'HP',
@@ -375,7 +376,7 @@ const zh: Record<MessageKey, string> = {
   scalesFrom: '× 属性',
   remove: '删除',
   weaponPassive: '武器特效',
-  imagesNote: '图片外链自 enka.network 与米哈游官方 CDN。数据来源：genshin-db。',
+  imagesNote: '图片外链自 enka.network 与 Genshin Optimizer。数据来源：Genshin Optimizer（MIT）。',
   notFound: '未找到角色',
   back: '全部角色',
   hp: '生命值',

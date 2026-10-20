@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { artifactSets, character, weapons } from '#/server/genshin.server'
+import { artifactSets, character, weapons } from '#/server/data.server'
 import { calculate, defaultBuild, focusRow, type Build } from './calc'
 import { maxRolls, optimize } from './optimize'
 import { SUB_KEYS, type SubKey } from './tables'

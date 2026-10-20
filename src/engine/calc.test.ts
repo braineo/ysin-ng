@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { artifactSets, character, weapons } from '#/server/genshin.server'
+import { artifactSets, character, weapons } from '#/server/data.server'
 import { buildPanel, calculate, defMult, defaultBuild, resMult, type Build } from './calc'
 import { SUB_KEYS } from './tables'
 import type { CharacterData, TransReaction } from './types'

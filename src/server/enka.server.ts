@@ -11,7 +11,7 @@ import { LEVEL_KEYS, SUB_ROLL, WEAPON_LEVEL_KEYS, type MainKey, type SubKey } fr
 import type { CharacterData, Element } from '#/engine/types'
 import { iconUrl, type Lang } from '#/lib/assets'
 import type { GamePanel, SavedBuild } from '#/lib/store'
-import { artifactSets, character, roster, slugById, weapons } from './genshin.server'
+import { artifactSets, character, roster, slugById, weapons } from './data.server'
 
 const UA = 'ysin-ng/0.1 (local genshin calculator)'
 const SKILL_ORDER_URL =

@@ -57,11 +57,14 @@ type Props = {
 
 export function Results({ char, build, result, game, onFocus }: Props) {
   const t = useT()
+  const lang = useLang()
   const fmt = useFmt()
   const stats = panelStats(result.panel, char.element)
   const focus = focusRow(result.rows, build.focus)
   const label = (k: string) =>
     k === 'dmg' ? `${t(char.element)} ${t('dmgBonus')}` : k === 'heal' ? t('healBonus') : t(k)
+  // the engine writes "128% ATK"; EM stays short in English, the rest reads as the panel labels
+  const statShort = (m: string) => (m === 'EM' && lang === 'en' ? m : t(m.toLowerCase()))
   const show = (k: string, v: number) => (isPctStat(k) ? pct(v) : fmt.format(v))
 
   return (
@@ -180,7 +183,9 @@ export function Results({ char, build, result, game, onFocus }: Props) {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{r.formula}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {r.formula.replace(/\b(ATK|HP|DEF|EM)\b/g, (m) => statShort(m))}
+                        </TableCell>
                         {r.kind === 'damage' ? (
                           <>
                             <TableCell className="text-right tabular-nums">
