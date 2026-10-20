@@ -6,7 +6,14 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { keepPath, type GoLabel, type GoNode, type GoSheet } from '../src/engine/passives'
+import {
+  keepPath,
+  type GoLabel,
+  type GoMove,
+  type GoNode,
+  type GoSheet,
+  type GoText,
+} from '../src/engine/passives'
 
 const [GO, OUT] = [
   resolve(process.argv[2] ?? 'go'),
@@ -179,13 +186,98 @@ async function labels(sheet: unknown, conds: GoSheet['conds']) {
   return out
 }
 
-async function collect(keys: string[], get: (k: string) => { data: Record<string, unknown> }) {
+type Field = {
+  node?: GoNode & { data?: object; info?: { name?: unknown; variant?: string } }
+  text?: unknown
+}
+type CharSheet = {
+  data: { display: Record<string, unknown> }
+  sheet: Record<
+    string,
+    { sections?: { fields?: Field[]; states?: Record<string, { fields?: Field[] }> }[] }
+  >
+}
+
+function moveKind(n: NonNullable<Field['node']>): GoMove['kind'] | null {
+  if (n.operation === 'data' && n.operands[0]?.path?.join('.') === 'hit.dmg') return 'damage'
+  const variant = n.info?.variant ?? ''
+  if (variant === 'heal') return 'heal'
+  if (/^(lunar|stellar)/.test(variant)) return 'lunar'
+  return reads(n, new Set()).has('total.shield_') ? 'shield' : null
+}
+const flatten = (o: object, prefix = ''): Record<string, GoNode> =>
+  Object.fromEntries(
+    Object.entries(o).flatMap(([k, v]) =>
+      (v as GoNode)?.operation
+        ? [[prefix + k, slim(v as GoNode)]]
+        : v && typeof v === 'object'
+          ? Object.entries(flatten(v, `${prefix}${k}.`))
+          : [],
+    ),
+  )
+
+/** the damage / heal / shield fields of a character sheet, with their (unrendered) names */
+function moveFields(cs: CharSheet) {
+  const where = new Map<object, string>()
+  const index = (o: Record<string, unknown>, p: string) => {
+    for (const [k, v] of Object.entries(o ?? {}))
+      if ((v as GoNode)?.operation) where.set(v as object, p + k)
+      else if (v && typeof v === 'object') index(v as Record<string, unknown>, `${p}${k}.`)
+  }
+  index(cs.data.display, '')
+  const out: { move: GoMove; label: unknown }[] = []
+  const seen = new Set<string>()
+  for (const [talent, t] of Object.entries(cs.sheet))
+    for (const s of t?.sections ?? [])
+      for (const f of [
+        ...(s.fields ?? []),
+        ...Object.values(s.states ?? {}).flatMap((st) => st?.fields ?? []),
+      ]) {
+        const n = f?.node
+        const id = n && where.get(n)
+        if (!n || !id || seen.has(id) || /^(basic|reaction)\./.test(id)) continue
+        const kind = moveKind(n)
+        if (!kind) continue
+        seen.add(id)
+        const data =
+          kind === 'damage' ? flatten(n.data ?? {}) : kind === 'lunar' ? {} : { value: slim(n) }
+        out.push({ move: { id, talent, kind, name: {}, data }, label: n.info?.name ?? f.text })
+      }
+  return out
+}
+
+/** talent names from GO's datamined text (char_<key>_gen.json) */
+function talentNames(key: string) {
+  const out: Record<string, GoText> = {}
+  for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
+    const f = join(GO, 'libs/gi/dm-localization/assets/locales', lng, `char_${key}_gen.json`)
+    if (!existsSync(f)) continue
+    for (const [k, v] of Object.entries(JSON.parse(readFileSync(f, 'utf8'))))
+      if ((v as { name?: string })?.name) (out[k] ??= {})[lang] = (v as { name: string }).name
+  }
+  return out
+}
+
+async function collect(
+  keys: string[],
+  get: (k: string) => { data: Record<string, unknown> },
+  isChar = false,
+) {
   const out: Record<string, GoSheet> = {}
   for (const k of keys) {
     const sheet = get(k)
     const s = prune(sheet.data)
-    if (!Object.keys(s.nodes).length) continue
+    const moves = isChar ? moveFields(sheet as unknown as CharSheet) : []
+    if (!Object.keys(s.nodes).length && !moves.length) continue
     if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds)
+    if (moves.length) {
+      for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
+        await i18n.changeLanguage(lng)
+        for (const m of moves) m.move.name[lang] = text(m.label)
+      }
+      s.moves = moves.map((m) => m.move)
+      s.talents = talentNames(k)
+    }
     out[k] = s
   }
   return out
@@ -194,7 +286,7 @@ const sha = execFileSync('git', ['-C', GO, 'rev-parse', 'HEAD']).toString().trim
 const out = {
   source: `https://github.com/frzyc/genshin-optimizer/tree/${sha}`,
   license: readFileSync(join(GO, 'LICENSE'), 'utf8'),
-  chars: await collect(consts.allCharacterKeys, (k) => sheets.getCharSheet(k, 'F')),
+  chars: await collect(consts.allCharacterKeys, (k) => sheets.getCharSheet(k, 'F'), true),
   weapons: await collect(consts.allWeaponKeys, (k) => sheets.getWeaponSheet(k)),
   sets: await collect(consts.allArtifactSetKeys, (k) => sheets.getArtSheet(k)),
 }

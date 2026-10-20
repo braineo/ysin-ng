@@ -13,11 +13,26 @@ export type GoNode = {
 }
 /** a toggle's label and its states' labels, as GO shows them */
 export type GoLabel = { name?: string; states?: Record<string, string> }
+export type GoText = { en?: string; zh?: string }
+/** one row of a character's damage table, in GO's sheet order */
+export type GoMove = {
+  /** GO's display path, e.g. "charged.frostflake" */
+  id: string
+  /** GO sheet section: auto, skill, burst, passive1..3, constellation1..6 */
+  talent: string
+  kind: 'damage' | 'heal' | 'shield' | 'lunar'
+  name: GoText
+  /** damage: the hit's own data by path ("hit.base", "hit.ele", "premod.critRate_", ...); heal / shield: { value } */
+  data: Record<string, GoNode>
+}
 /** one GO sheet: contributions by output path, each toggle's possible states, and their labels */
 export type GoSheet = {
   nodes: Record<string, GoNode>
   conds: Record<string, string[]>
   labels?: { en: Record<string, GoLabel>; zh: Record<string, GoLabel> }
+  /** characters only */
+  moves?: GoMove[]
+  talents?: Record<string, GoText>
 }
 
 const STAT: Record<string, StatKey> = {
