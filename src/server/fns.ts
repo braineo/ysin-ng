@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import type { WeaponType } from '#/engine/types'
 import type { Lang } from '#/lib/assets'
 import { importProfile } from './enka.server'
-import { artifactSets, character, roster, weapons } from './genshin.server'
+import { artifactSets, character, roster, weapons } from './data.server'
 
 const lang = (l: unknown): Lang => (l === 'zh' ? 'zh' : 'en')
 const WEAPON_TYPES: WeaponType[] = ['sword', 'claymore', 'polearm', 'bow', 'catalyst']

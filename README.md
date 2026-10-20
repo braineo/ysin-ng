@@ -4,7 +4,8 @@ A Genshin Impact damage calculator, rebuilt from the original [Ysin](https://ufo
 English UI with Chinese (`?lang=zh`).
 
 **Stack:** TanStack Start (React 19, SSR, server functions) · Bun (package manager and runtime) ·
-shadcn/ui + Tailwind v4 · oxlint · oxfmt · [genshin-db](https://github.com/theBowja/genshin-db) for game data.
+shadcn/ui + Tailwind v4 · oxlint · oxfmt · game data, formulas and translations from
+[Genshin Optimizer](https://github.com/frzyc/genshin-optimizer) (MIT).
 
 ## Features
 
@@ -27,6 +28,7 @@ shadcn/ui + Tailwind v4 · oxlint · oxfmt · [genshin-db](https://github.com/th
 
 ```bash
 bun install
+bun run data         # pull the pinned GO export (dev / build / test / check run it first)
 bun run dev          # http://localhost:3000
 bun run check        # oxfmt --check, oxlint, tsc, bun test
 bun run build && bun run start   # production server (serve.ts) on $PORT, default 3000
@@ -34,21 +36,24 @@ bun run build && bun run start   # production server (serve.ts) on $PORT, defaul
 
 ## How it fits together
 
-| Path                           | Role                                                                                                                    |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `src/server/genshin.server.ts` | Queries genshin-db (server only, it is ~180 MB) and normalizes characters, weapons and artifact sets for one language.  |
-| `src/server/fns.ts`            | Server functions: `getRoster`, `getCalculatorData`, `importUid`.                                                        |
-| `src/server/enka.server.ts`    | enka.network profile → builds (ids match genshin-db; skill order from enka's `characters.json`), cached per enka's TTL. |
-| `src/engine/talents.ts`        | Parses genshin-db talent labels (`({param1:F1P} ATK+{param2:F1P} Elemental Mastery)×2`) into scaling terms.             |
-| `src/engine/calc.ts`           | Stat panel and damage formula (ported from Ysin's engine, see below).                                                   |
-| `src/engine/sets.ts`           | 2-piece bonuses parsed from set text; hand-written 4-piece effects for common sets.                                     |
-| `src/engine/optimize.ts`       | Substat / main-stat optimizer.                                                                                          |
-| `src/lib/store.ts`             | localStorage store (saved builds, drafts, recent UIDs) via `useSyncExternalStore`.                                      |
-| `src/engine/tables.ts`         | Constants genshin-db does not have: reaction level multipliers, artifact main stats, substat roll values.               |
-| `src/lib/i18n.ts`              | UI strings (en / zh). Game text comes localized from genshin-db.                                                        |
-| `src/routes/`                  | `/` roster, `/c/$slug` calculator, `/builds`, `/compare`, `/import`.                                                    |
+| Path                            | Role                                                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/go-data.yml` | Daily: checks out GO, installs its dependencies, runs `scripts/go-data.ts`, publishes to `go-data`.       |
+| `scripts/go-data.ts`            | Exports `passives.json` (formulas, damage rows, toggles) and `data.json` (stats, en/zh text, icons, ids). |
+| `scripts/pull-data.ts`          | Downloads the pinned `go-data` commit from jsDelivr into the git-ignored `*.gen.json` files.              |
+| `src/server/data.server.ts`     | Normalizes the export into characters, weapons and artifact sets for one language (server only).          |
+| `src/server/fns.ts`             | Server functions: `getRoster`, `getCalculatorData`, `importUid`.                                          |
+| `src/server/enka.server.ts`     | enka.network profile → builds (game ids; skill order from enka's `characters.json`), cached per TTL.      |
+| `src/engine/passives.ts`        | Evaluates GO's formula trees: passives / constellations / weapons / sets as buffs, and per-hit values.    |
+| `src/engine/calc.ts`            | Stat panel and damage formula (ported from Ysin's engine, see below) over GO's damage rows.               |
+| `src/engine/optimize.ts`        | Substat / main-stat optimizer.                                                                            |
+| `src/lib/store.ts`              | localStorage store (saved builds, drafts, recent UIDs) via `useSyncExternalStore`.                        |
+| `src/engine/tables.ts`          | Reaction level multipliers, transformative coefficients, artifact main stats, substat roll values.        |
+| `src/lib/i18n.ts`               | UI strings (en / zh). Game text comes localized from GO.                                                  |
+| `src/routes/`                   | `/` roster, `/c/$slug` calculator, `/builds`, `/compare`, `/import`.                                      |
 
-Images are hotlinked, never bundled: `https://enka.network/ui/<filename>.png` (the filename comes from genshin-db), with the official miHoYo CDN URL from genshin-db as fallback.
+Images are hotlinked, never bundled: `https://enka.network/ui/<filename>.png` (game file names from GO), with GO's own
+copy on jsDelivr as fallback.
 
 ## Damage formula
 
@@ -62,11 +67,13 @@ CRIT   = 1 + CR·CD (average) · 1 + CD (crit)
 Transformative = LevelMult × coef × (1 + 16·EM/(EM+2000) + bonus) × RES
 ```
 
-`src/engine/calc.test.ts` checks the port against a number Ysin's own engine produced (Hu Tao vaporize charged attack, within 0.5%).
+`src/engine/calc.test.ts` runs six builds through `calculate()` and compares them with Ysin's own engine
+(`analysis/tools/parity.js`): stat panels within 0.1%, damage within 0.3%, with no hand-entered buffs.
 
-## What genshin-db does and doesn't cover
+## What comes from Genshin Optimizer
 
-genshin-db provides base stats by level, talent multipliers by level, weapon stats and refinement text, set text,
-constellations, and names in every language. It does **not** describe passives, constellations or weapon effects as
-data, only as text. Those are entered in the calculator's "Buffs from kit, weapon & team" panel (stat conversions such as
-"ATK + 6.26% of Max HP" are supported). Lunar reactions (6.x+) are shown but not calculated.
+Everything game-specific: base stats by level, talent rows (damage, heal, shield) and their per-hit bonuses, character
+passives and constellations, weapon passives, artifact set effects, toggle labels, names and texts in English and
+Chinese, icon file names and game ids. Toggles start off, as in GO. Where GO has no Chinese label yet, the toggle or row
+takes the Chinese game name of its talent, weapon passive or set. Not modelled yet: team buffs and resonance (no
+teammates), lunar reactions (shown but not calculated).

@@ -23,11 +23,7 @@ function Roster() {
   const list = roster
     .filter((c) => !element || c.element === element)
     .filter((c) => !q || `${c.name} ${c.slug}`.toLowerCase().includes(q.trim().toLowerCase()))
-    .toSorted(
-      (a, b) =>
-        (Number.parseFloat(b.version) || 0) - (Number.parseFloat(a.version) || 0) ||
-        b.rarity - a.rarity,
-    )
+    .toSorted((a, b) => b.id - a.id || b.rarity - a.rarity)
 
   return (
     <div className="space-y-5">

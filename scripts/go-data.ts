@@ -46,7 +46,7 @@ const helper = (p: string) => /^(teamBuff\.)?(tally|nonStacking)\./.test(p)
 const isCond = (x?: GoNode) => x?.operation === 'read' && x.path![0] === 'conditional'
 
 /**
- * Keep only what the evaluator reads; GO's ascension / weapon substat reads are genshin-db's job.
+ * Keep only what the evaluator reads; GO's ascension / weapon substat reads are exported separately (data.json).
  * `rows` are the character's damage-row formulas, which may read helper paths and toggles too.
  */
 function prune(data: Record<string, unknown>, rows: GoNode[] = []): GoSheet {

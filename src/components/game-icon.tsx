@@ -1,6 +1,6 @@
 import { cn } from '#/lib/utils'
 
-/** Hotlinked game image: tries enka.network first, then the miHoYo CDN URL from genshin-db. */
+/** Hotlinked game image: tries enka.network first, then Genshin Optimizer's copy. */
 export function GameIcon({
   src,
   fallback,

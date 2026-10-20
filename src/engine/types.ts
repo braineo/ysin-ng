@@ -88,6 +88,8 @@ export type WeaponData = {
   icon: string
   iconFallback: string
   mainStat: StatKey | 'dmg' | null
+  /** element of a DMG Bonus secondary stat (physical on most) */
+  mainElement?: Element
   stats: Record<string, { atk: number; spec: number }>
   passiveName: string
   /** passive text for R1..R5 */

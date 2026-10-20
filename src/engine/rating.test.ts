@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import fixture from '#/server/__fixtures__/enka-profile.json'
 import { toBuild } from '#/server/enka.server'
-import { artifactSets, character, slugById, weapons } from '#/server/genshin.server'
+import { artifactSets, character, slugById, weapons } from '#/server/data.server'
 import { defaultBuild, type Build } from './calc'
 import { critLoss, rate } from './rating'
 
