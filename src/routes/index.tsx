@@ -1,45 +1,45 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
-import { ELEMENT_BG, GameIcon } from '#/components/game-icon'
-import { Input } from '#/components/ui/input'
-import { ELEMENTS } from '#/engine/tables'
-import type { Element } from '#/engine/types'
-import { useT } from '#/lib/i18n'
-import { cn } from '#/lib/utils'
-import { getRoster } from '#/server/fns'
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { ELEMENT_BG, GameIcon } from "#/components/game-icon";
+import { Input } from "#/components/ui/input";
+import { ELEMENTS } from "#/engine/tables";
+import type { Element } from "#/engine/types";
+import { useT } from "#/lib/i18n";
+import { cn } from "#/lib/utils";
+import { getRoster } from "#/server/fns";
 
-export const Route = createFileRoute('/')({
-  loaderDeps: ({ search }) => ({ lang: search.lang ?? ('en' as const) }),
+export const Route = createFileRoute("/")({
+  loaderDeps: ({ search }) => ({ lang: search.lang ?? ("en" as const) }),
   loader: ({ deps }) => getRoster({ data: { lang: deps.lang } }),
   component: Roster,
-})
+});
 
 function Roster() {
-  const roster = Route.useLoaderData()
-  const t = useT()
-  const [q, setQ] = useState('')
-  const [element, setElement] = useState<Element | null>(null)
+  const roster = Route.useLoaderData();
+  const t = useT();
+  const [q, setQ] = useState("");
+  const [element, setElement] = useState<Element | null>(null);
 
   const list = roster
     .filter((c) => !element || c.element === element)
     .filter((c) => !q || `${c.name} ${c.slug}`.toLowerCase().includes(q.trim().toLowerCase()))
-    .toSorted((a, b) => b.id - a.id || b.rarity - a.rarity)
+    .toSorted((a, b) => b.id - a.id || b.rarity - a.rarity);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-2 font-display text-2xl font-bold">{t('characters')}</h1>
+        <h1 className="mr-2 font-display text-2xl font-bold">{t("characters")}</h1>
         <Input
           id="roster-search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={t('search')}
-          aria-label={t('search')}
+          placeholder={t("search")}
+          aria-label={t("search")}
           className="w-full max-w-xs"
         />
         <fieldset className="flex flex-wrap gap-1">
           <legend className="sr-only">Element</legend>
-          {ELEMENTS.filter((e) => e !== 'physical').map((e) => (
+          {ELEMENTS.filter((e) => e !== "physical").map((e) => (
             <button
               key={e}
               type="button"
@@ -47,7 +47,7 @@ function Roster() {
               onClick={() => setElement(element === e ? null : e)}
               className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background"
             >
-              <span className={cn('size-2 rounded-full', ELEMENT_BG[e])} />
+              <span className={cn("size-2 rounded-full", ELEMENT_BG[e])} />
               {t(e)}
             </button>
           ))}
@@ -67,16 +67,16 @@ function Roster() {
             >
               <div
                 className={cn(
-                  'relative aspect-square',
+                  "relative aspect-square",
                   c.rarity === 5
-                    ? 'bg-gradient-to-b from-star5/50 to-star5/10'
-                    : 'bg-gradient-to-b from-star4/40 to-star4/10',
+                    ? "bg-gradient-to-b from-star5/50 to-star5/10"
+                    : "bg-gradient-to-b from-star4/40 to-star4/10",
                 )}
               >
                 <GameIcon src={c.icon} fallback={c.iconFallback} alt="" className="size-full" />
                 <span
                   className={cn(
-                    'absolute right-1.5 top-1.5 size-2.5 rounded-full ring-2 ring-card',
+                    "absolute right-1.5 top-1.5 size-2.5 rounded-full ring-2 ring-card",
                     ELEMENT_BG[c.element],
                   )}
                 />
@@ -87,5 +87,5 @@ function Roster() {
         ))}
       </ul>
     </div>
-  )
+  );
 }
