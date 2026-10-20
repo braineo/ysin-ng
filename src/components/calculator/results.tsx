@@ -172,7 +172,7 @@ export function Results({ char, build, result, game, onFocus }: Props) {
                         </TableCell>
                         <TableCell className="whitespace-normal">
                           <span className={ELEMENT_TEXT[r.element]}>●</span> {r.label}
-                          {r.reaction && r.talent !== "reaction" && (
+                          {r.reaction && !r.label.includes(t(r.reaction)) && (
                             <Badge variant="outline" className="ml-1.5">
                               {t(r.reaction)}
                             </Badge>
