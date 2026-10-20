@@ -339,6 +339,9 @@ function moveFields(cs: CharSheet) {
   return out;
 }
 
+/** a row's Chinese name within its talent section */
+const keyOf = (m: GoMove) => `${m.talent}|${m.name.zh}`;
+
 /** reaction names: GO's game text has the Stellar Glimmer ones, not the lunar ones */
 const LUNAR_NAMES: Record<string, GoText> = {
   lunarcharged: { en: "Lunar-Charged", zh: "月感电" },
@@ -401,16 +404,15 @@ async function collect(
           ? [section.zh, reaction].filter(Boolean).join(" · ")
           : move.name.zh;
       }
-      // fallback names can still collide (Odette's coda / plume / wing hits): number them
+      // fallback names can still collide within a section (Odette's coda / plume / wing hits): number them
       const total = new Map<string, number>();
-      for (const { move } of moves)
-        total.set(move.name.zh ?? "", (total.get(move.name.zh ?? "") ?? 0) + 1);
+      for (const { move } of moves) total.set(keyOf(move), (total.get(keyOf(move)) ?? 0) + 1);
       const seen = new Map<string, number>();
       for (const { move } of moves) {
-        const zh = move.name.zh;
-        if (!zh || (total.get(zh) ?? 0) < 2) continue;
-        seen.set(zh, (seen.get(zh) ?? 0) + 1);
-        move.name.zh = `${zh} (${seen.get(zh)})`;
+        const key = keyOf(move);
+        if (!move.name.zh || (total.get(key) ?? 0) < 2) continue;
+        seen.set(key, (seen.get(key) ?? 0) + 1);
+        move.name.zh = `${move.name.zh} (${seen.get(key)})`;
       }
       s.moves = moves.map((m) => m.move);
       s.talents = talents;
