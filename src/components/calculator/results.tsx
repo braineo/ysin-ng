@@ -157,7 +157,7 @@ export function Results({ char, build, result, game, onFocus }: Props) {
                     return (
                       <TableRow key={r.id} data-state={isFocus ? 'selected' : undefined}>
                         <TableCell className="px-1">
-                          {r.kind !== 'lunar' && (
+                          {
                             <button
                               type="button"
                               title={t('focus')}
@@ -168,25 +168,25 @@ export function Results({ char, build, result, game, onFocus }: Props) {
                             >
                               <Star className={cn('size-4', isFocus && 'fill-current')} />
                             </button>
-                          )}
+                          }
                         </TableCell>
                         <TableCell className="whitespace-normal">
                           <span className={ELEMENT_TEXT[r.element]}>●</span> {r.label}
-                          {r.reaction && (
+                          {r.reaction && r.talent !== 'reaction' && (
                             <Badge variant="outline" className="ml-1.5">
                               {t(r.reaction)}
                             </Badge>
                           )}
-                          {r.kind !== 'damage' && (
+                          {(r.kind === 'heal' || r.kind === 'shield') && (
                             <Badge variant="outline" className="ml-1.5">
-                              {t(r.kind === 'lunar' ? 'lunarNote' : r.kind)}
+                              {t(r.kind)}
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {r.formula.replace(/\b(ATK|HP|DEF|EM)\b/g, (m) => statShort(m))}
                         </TableCell>
-                        {r.kind === 'damage' ? (
+                        {r.kind === 'damage' || r.kind === 'special' ? (
                           <>
                             <TableCell className="text-right tabular-nums">
                               {fmt.format(r.nonCrit)}
@@ -200,7 +200,7 @@ export function Results({ char, build, result, game, onFocus }: Props) {
                           </>
                         ) : (
                           <TableCell colSpan={3} className="text-right font-semibold tabular-nums">
-                            {r.kind === 'lunar' ? '—' : fmt.format(r.avg)}
+                            {fmt.format(r.avg)}
                           </TableCell>
                         )}
                       </TableRow>

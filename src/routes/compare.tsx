@@ -231,7 +231,7 @@ function Compare() {
               </TableHeader>
               <TableBody>
                 {base.result.rows
-                  .filter((r) => r.kind !== 'lunar')
+                  .filter((r) => !Number.isNaN(r.avg))
                   .map((r) => {
                     const baseVal = r.avg
                     return (

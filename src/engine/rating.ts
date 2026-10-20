@@ -104,7 +104,7 @@ export function rate(
 ): Rating | null {
   const now = calculate(char, weapon, sets, build, team)
   const target = focusRow(now.rows, build.focus)
-  if (!target || target.kind === 'lunar' || !target.avg) return null
+  if (!target || Number.isNaN(target.avg) || !target.avg) return null
   const evaluate = (b: Build) => {
     const r = calculate(char, weapon, sets, b, team)
     return { v: r.rows.find((x) => x.id === target.id)?.avg ?? 0, er: r.panel.er }

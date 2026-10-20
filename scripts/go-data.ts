@@ -122,6 +122,7 @@ const { renderToStaticMarkup } = await import(join(GO, 'node_modules/react-dom/s
 const { i18n } = await import(join(GO, 'libs/gi/i18n/src/index.ts'))
 // field names live in a registry keyed by the node's info path (see infoMut in libs/gi/wr)
 const { infoManager } = await import(join(GO, 'libs/gi/wr/src/index.ts'))
+const { transformativeReactions } = await import(join(GO, 'libs/gi/keymap/src/index.ts'))
 const LANGS = { en: 'en', zh: 'chs' } as const
 for (const lng of Object.values(LANGS))
   for (const lib of ['common/localization', 'gi/localization', 'gi/dm-localization']) {
@@ -227,7 +228,7 @@ async function labels(
 }
 
 type Field = {
-  node?: GoNode & { data?: object; info?: { path?: string; variant?: string } }
+  node?: GoNode & { data?: object; info?: { path?: string; variant?: string; subVariant?: string } }
   text?: unknown
 }
 type CharSheet = {
@@ -240,11 +241,22 @@ type CharSheet = {
 
 function moveKind(n: NonNullable<Field['node']>): GoMove['kind'] | null {
   if (n.operation === 'data' && n.operands[0]?.path?.join('.') === 'hit.dmg') return 'damage'
-  if (/^(lunar|stellar)/.test(n.info?.variant ?? '')) return 'lunar'
-  // GO's customHealNode / customShieldNode: heals add total.healInc, shields scale by total.shield_
   const r = reads(n, new Set())
+  // GO's specialReactionDmgNode (lunar / Stellar Glimmer) picks its crit by hit mode; lunar-tagged
+  // fields without one are stat displays (e.g. a base DMG bonus), not damage
+  if (r.has('hit.hitMode')) return 'special'
+  // GO's customHealNode / customShieldNode: heals add total.healInc, shields scale by total.shield_
   return r.has('total.healInc') ? 'heal' : r.has('total.shield_') ? 'shield' : null
 }
+/** a special row's formula and its own data (per-hit bonuses), like a damage row's */
+const special = (n: GoNode & { data?: object }) =>
+  n.operation === 'data'
+    ? { value: slim(n.operands[0]), ...flatten(n.data ?? {}) }
+    : { value: slim(n) }
+const specialInfo = (variant: string, sub?: string) => ({
+  reaction: variant,
+  element: sub ?? transformativeReactions[variant]?.resist,
+})
 const flatten = (o: object, prefix = ''): Record<string, GoNode> =>
   Object.fromEntries(
     Object.entries(o).flatMap(([k, v]) =>
@@ -265,7 +277,7 @@ function moveFields(cs: CharSheet) {
       else if (v && typeof v === 'object') index(v as Record<string, unknown>, `${p}${k}.`)
   }
   index(cs.data.display, '')
-  const out: { move: GoMove; label: unknown; suffix?: string }[] = []
+  const out: { move: GoMove; label: unknown; suffix?: string; reaction?: string }[] = []
   const seen = new Set<string>()
   for (const [talent, t] of Object.entries(cs.sheet))
     for (const s of t?.sections ?? [])
@@ -280,16 +292,56 @@ function moveFields(cs: CharSheet) {
         if (!kind) continue
         seen.add(id)
         const data =
-          kind === 'damage' ? flatten(n.data ?? {}) : kind === 'lunar' ? {} : { value: slim(n) }
+          kind === 'damage'
+            ? flatten(n.data ?? {})
+            : kind === 'special'
+              ? special(n)
+              : { value: slim(n) }
         const info = n.info?.path ? infoManager[n.info.path] : undefined
+        const extra =
+          kind === 'special' ? specialInfo(n.info?.variant ?? '', n.info?.subVariant) : {}
         out.push({
-          move: { id, talent, kind, name: {}, data },
+          move: { id, talent, kind, name: {}, data, ...extra },
           label: info?.name ?? f.text,
           suffix: info?.textSuffix,
         })
       }
+  // reactions the character triggers that deal lunar / Stellar Glimmer DMG; GO gates them by element
+  for (const [k, n] of Object.entries(cs.data.display.reaction ?? {}) as [
+    string,
+    NonNullable<Field['node']>,
+  ][]) {
+    const variant = k.replace(/_vortex\d$/, '')
+    if (!/^(lunar|stellar)/.test(variant)) continue
+    const sub = (n.info?.subVariant ?? (n.operands?.[2] as Field['node'])?.info?.subVariant) as
+      | string
+      | undefined
+    const vortex = k.match(/_vortex(\d)$/)?.[1]
+    out.push({
+      move: {
+        id: `reaction.${k}`,
+        talent: 'reaction',
+        kind: 'special',
+        name: {},
+        data: { value: slim(n) },
+        ...specialInfo(variant, sub),
+      },
+      label: undefined,
+      suffix: vortex && `(${vortex})`,
+      reaction: variant,
+    })
+  }
   return out
 }
+
+/** reaction names: GO's game text has the Stellar Glimmer ones, not the lunar ones */
+const LUNAR_NAMES: Record<string, GoText> = {
+  lunarcharged: { en: 'Lunar-Charged', zh: '月感电' },
+  lunarbloom: { en: 'Lunar-Bloom', zh: '月绽放' },
+  lunarcrystallize: { en: 'Lunar-Crystallize', zh: '月结晶' },
+}
+const reactionName = (v: string): GoText =>
+  LUNAR_NAMES[v] ?? both((l) => locale(l, 'sheet_gen').reaction?.[v])
 
 /** talent names from GO's datamined text (char_<key>_gen.json) */
 function talentNames(key: string) {
@@ -329,7 +381,7 @@ async function collect(
       for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
         await i18n.changeLanguage(lng)
         for (const m of moves) {
-          const name = text(m.label)
+          const name = m.reaction ? reactionName(m.reaction)[lang] : text(m.label)
           m.move.name[lang] = name && m.suffix ? `${name} ${m.suffix}` : name
         }
       }

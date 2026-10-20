@@ -459,9 +459,10 @@ export function calcRows(
       ? undefined
       : DMG_REACTIONS[char.element]?.find((r) => r.reaction === build.reaction)
   // stat reads inside a row's formulas come from the (row's) panel; everything else from the build
-  const reader = (p: Panel, data: GoMove['data']): Reader => {
+  const reader = (p: Panel, data: GoMove['data'], hitMode?: string): Reader => {
     const self: Reader = (path) => {
       const key = path.join('.')
+      if (key === 'hit.hitMode') return hitMode
       if (key in data && !key.startsWith('premod.')) return evalNode(data[key], self)
       if (path.length === 2 && path[0] === 'base') return p.base[path[1] as keyof Panel['base']]
       if (path.length === 2 && (path[0] === 'total' || path[0] === 'premod')) {
@@ -470,24 +471,20 @@ export function calcRows(
         const b = buffOf(path[1])
         if (b) return sum(p.buffs, b.key, b.on)
       }
+      if (path[0] === 'enemy') {
+        // lunar / Stellar Glimmer DMG ignores DEF in practice (GO: 99999999 / (99999999 + …))
+        if (path[1] === 'transDef') return 1
+        const el = path[1]?.match(/^(\w+)_resMulti_$/)?.[1]
+        if (el) return resMult(build.enemyRes - sum(p.buffs, 'res', el))
+      }
       return read(path) // talent levels (total.skillIndex), toggles, infusion, ...
     }
     return self
   }
-  return char.moves.map((m): HitResult => {
+  const rows = char.moves.map((m): HitResult => {
     const common = { id: m.id, label: m.label, talent: m.talent, group: m.group, kind: m.kind }
     const base0 = reader(panel, m.data)
-    if (m.kind === 'lunar')
-      return {
-        ...common,
-        attack: 'skill',
-        element: char.element,
-        formula: '',
-        nonCrit: Number.NaN,
-        crit: Number.NaN,
-        avg: Number.NaN,
-      }
-    if (m.kind !== 'damage') {
+    if (m.kind === 'heal' || m.kind === 'shield') {
       const amount = Number(evalNode(m.data.value, base0) ?? 0)
       return {
         ...common,
@@ -506,6 +503,20 @@ export function calcRows(
       return b && v ? [{ key: b.key, on: b.on, value: b.sign ? -v : v, source: m.label }] : []
     })
     const p = own.length ? panelOf(panel.base, [...panel.buffs, ...own]) : panel
+    if (m.kind === 'special') {
+      // GO's own lunar / Stellar Glimmer formula: base, bonuses, crit and RES in one, per hit mode
+      const at = (mode: string) => Number(evalNode(m.data.value, reader(p, m.data, mode)) ?? 0) || 0
+      return {
+        ...common,
+        attack: 'skill',
+        element: (m.element as Element | undefined) ?? char.element,
+        formula: '',
+        reaction: m.reaction as Reaction | undefined,
+        nonCrit: at('hit'),
+        crit: at('critHit'),
+        avg: at('avgHit'),
+      }
+    }
     const r = reader(p, m.data)
     const b = p.buffs
     const attack = MOVE[String(evalNode(m.data['hit.move'], r))] ?? 'normal'
@@ -553,6 +564,8 @@ export function calcRows(
       avg: nonCrit * (1 + cr * cd),
     }
   })
+  // reaction rows (Lunar-Charged, Stellar Swirl, ...) the character cannot trigger come out as 0
+  return rows.filter((r) => r.talent !== 'reaction' || r.avg > 0)
 }
 
 /** Transformative reactions the character can trigger: no DEF, no crit. Swirl is listed per swirled element. */

@@ -46,7 +46,7 @@ export function OptimizerCard({ char, weapon, sets, build, rows, team, onApply }
   const [tryMains, setTryMains] = useState(false)
   const [progress, setProgress] = useState<[number, number] | null>(null)
   const [result, setResult] = useState<OptimizeResult | 'none' | null>(null)
-  const targets = rows.filter((r) => r.kind !== 'lunar')
+  const targets = rows.filter((r) => !Number.isNaN(r.avg))
   const target = focusRow(rows, build.focus)
 
   async function run() {

@@ -22,6 +22,8 @@ const SHEETS = passives as unknown as Record<
   resonance: GoSheet
 }
 const RESONANCE: GoText = { en: 'Elemental Resonance', zh: '元素共鸣' }
+/** the damage table's group of reaction rows (Lunar-Charged, Stellar Swirl, ...) */
+const REACTIONS: GoText = { en: 'Reactions', zh: '剧变反应' }
 
 const text = (t: GoText, lang: Lang) => t[lang] || t.en || ''
 /** enka.network's UI mirror first, GO's own copy (jsDelivr, pinned commit) as fallback */
@@ -76,7 +78,8 @@ export const character = memo((key: string): CharacterData | null => {
   if (!c) return null
   const go = SHEETS.chars[c.key]
   const asc = spec(c.spec)
-  const talentName = (t: string) => text(go?.talents?.[t] ?? {}, lang) || t
+  const talentName = (t: string) =>
+    text(t === 'reaction' ? REACTIONS : (go?.talents?.[t] ?? {}), lang) || t
   return {
     slug,
     name: text(c.name, lang),

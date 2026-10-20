@@ -34,12 +34,20 @@ const KEYS: BuffKey[] = [
 ]
 const FLAT_KEYS = new Set<BuffKey>(['atk', 'hp', 'def', 'em', 'flat'])
 const FROM: ScalingStat[] = ['hp', 'atk', 'def', 'em']
+const SPECIAL: Reaction[] = [
+  'lunarcharged',
+  'lunarbloom',
+  'lunarcrystallize',
+  'stellarconduct',
+  'stellarswirl',
+]
 const REACTIONS: Reaction[] = [
   'vaporize',
   'melt',
   'aggravate',
   'spread',
   ...(Object.keys(TRANS) as TransReaction[]),
+  ...SPECIAL,
 ]
 
 /** Which `on` targets make sense for a key ('' = all). */

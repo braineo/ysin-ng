@@ -20,8 +20,12 @@ export type GoMove = {
   id: string
   /** GO sheet section: auto, skill, burst, passive1..3, constellation1..6 */
   talent: string
-  kind: 'damage' | 'heal' | 'shield' | 'lunar'
+  /** special: lunar / Stellar Glimmer damage, GO's own formula evaluated per hit mode */
+  kind: 'damage' | 'heal' | 'shield' | 'special'
   name: GoText
+  /** special rows: GO reaction key ("lunarcharged") and the element it deals */
+  reaction?: string
+  element?: string
   /** damage: the hit's own data by path ("hit.base", "hit.ele", "premod.critRate_", ...); heal / shield: { value } */
   data: Record<string, GoNode>
 }
@@ -71,23 +75,47 @@ const REACT: Record<string, Reaction> = {
   electrocharged: 'electrocharged',
   superconduct: 'superconduct',
   shattered: 'shatter',
+  lunarcharged: 'lunarcharged',
+  lunarbloom: 'lunarbloom',
+  lunarcrystallize: 'lunarcrystallize',
+  stellarconduct: 'stellarconduct',
+  stellarswirl: 'stellarswirl',
 }
 
-/** GO stat key → ysin-ng buff key; null = a mechanic ysin-ng doesn't model (lunar, stamina, ...) */
+/** GO stat key → ysin-ng buff key; null = a mechanic ysin-ng doesn't model (stamina, speed, ...) */
 export function buffOf(goKey: string): { key: BuffKey; on?: Buff['on']; sign?: -1 } | null {
   if (STAT[goKey]) return { key: STAT[goKey] }
   if (goKey === 'all_dmg_') return { key: 'dmg' }
   if (goKey === 'enemyDefRed_') return { key: 'defShred' }
   if (goKey === 'enemyDefIgn_') return { key: 'defIgnore' }
-  const m = goKey.match(/^(\w+?)_(dmg_|critRate_|critDMG_|dmgInc|enemyRes_)$/)
+  const m = goKey.match(
+    /^(\w+?)_(dmg_|critRate_|critDMG_|dmgInc|enemyRes_|baseDmg_|specialDmg_|mult_|reactionDmgInc|directDmgInc)$/,
+  )
   if (!m) return null
   const [, on, what] = m
+  if (REACT[on]) {
+    const key = (
+      {
+        dmg_: 'react',
+        critRate_: 'cr',
+        critDMG_: 'cd',
+        dmgInc: 'flat',
+        baseDmg_: 'baseDmg',
+        specialDmg_: 'specialDmg',
+        mult_: 'mult',
+        reactionDmgInc: 'reactionFlat',
+        directDmgInc: 'directFlat',
+      } as const
+    )[what as 'dmg_']
+    return key ? { key, on: REACT[on] } : null
+  }
   const target = MOVE[on] ?? (ELEMENTS.includes(on) ? (on as Element) : undefined)
-  if (what === 'dmg_' && REACT[on]) return { key: 'react', on: REACT[on] }
   if (!target) return null
   if (what === 'enemyRes_')
     return ELEMENTS.includes(on) ? { key: 'res', on: target, sign: -1 } : null
-  const key = ({ dmg_: 'dmg', critRate_: 'cr', critDMG_: 'cd', dmgInc: 'flat' } as const)[what]
+  const key = (
+    { dmg_: 'dmg', critRate_: 'cr', critDMG_: 'cd', dmgInc: 'flat' } as Record<string, BuffKey>
+  )[what]
   return key ? { key, on: target } : null
 }
 

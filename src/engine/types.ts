@@ -24,7 +24,14 @@ export type TransReaction =
   | 'hyperbloom'
   | 'burgeon'
   | 'burning'
-export type Reaction = AmpReaction | AddReaction | TransReaction
+/** lunar and Stellar Glimmer reactions (GO's "special" reactions): own damage formula, can crit */
+export type SpecialReaction =
+  | 'lunarcharged'
+  | 'lunarbloom'
+  | 'lunarcrystallize'
+  | 'stellarconduct'
+  | 'stellarswirl'
+export type Reaction = AmpReaction | AddReaction | TransReaction | SpecialReaction
 
 /** Panel stat a substat roll, main stat, ascension bonus or buff can add to. */
 export type StatKey =
@@ -45,8 +52,22 @@ export type StatKey =
  * dmg / cr / cd: `on` = element or attack key (none = all)
  * flat: flat damage added to each hit's base, `on` = attack key
  * res: resistance shred, `on` = element · defIgnore: `on` = attack key · react: reaction bonus, `on` = reaction
+ * lunar / Stellar Glimmer (`on` = that reaction): baseDmg / specialDmg (GO's "Base DMG" and "Elevated"
+ * bonuses), mult (Stellar multiplier bonus), reactionFlat / directFlat (flat DMG on reaction / direct hits)
  */
-export type BuffKey = StatKey | 'dmg' | 'flat' | 'res' | 'defShred' | 'defIgnore' | 'react'
+export type BuffKey =
+  | StatKey
+  | 'dmg'
+  | 'flat'
+  | 'res'
+  | 'defShred'
+  | 'defIgnore'
+  | 'react'
+  | 'baseDmg'
+  | 'specialDmg'
+  | 'mult'
+  | 'reactionFlat'
+  | 'directFlat'
 
 export type Buff = {
   key: BuffKey
