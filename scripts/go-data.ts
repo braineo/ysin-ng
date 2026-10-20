@@ -230,7 +230,7 @@ async function labels(
 type Field = {
   node?: GoNode & {
     data?: object;
-    info?: { path?: string; variant?: string; subVariant?: string };
+    info?: { path?: string; variant?: string };
   };
   text?: unknown;
 };
@@ -256,10 +256,16 @@ const special = (n: GoNode & { data?: object }) =>
   n.operation === "data"
     ? { value: slim(n.operands[0]), ...flatten(n.data ?? {}) }
     : { value: slim(n) };
-const specialInfo = (variant: string, sub?: string) => ({
-  reaction: variant,
-  element: sub ?? transformativeReactions[variant]?.resist,
-});
+/** a special formula's reaction and element, read off the formula: GO tags few of them */
+function specialInfo(n: GoNode) {
+  let reaction: string | undefined;
+  let element: string | undefined;
+  for (const r of reads(n, new Set())) {
+    reaction ??= r.match(/^total\.((?:lunar|stellar)\w+?)_specialDmg_$/)?.[1];
+    element ??= r.match(/^enemy\.(\w+)_resMulti_$/)?.[1];
+  }
+  return { reaction, element: element ?? transformativeReactions[reaction ?? ""]?.resist };
+}
 const flatten = (o: object, prefix = ""): Record<string, GoNode> =>
   Object.fromEntries(
     Object.entries(o).flatMap(([k, v]) =>
@@ -301,8 +307,7 @@ function moveFields(cs: CharSheet) {
               ? special(n)
               : { value: slim(n) };
         const info = n.info?.path ? infoManager[n.info.path] : undefined;
-        const extra =
-          kind === "special" ? specialInfo(n.info?.variant ?? "", n.info?.subVariant) : {};
+        const extra = kind === "special" ? specialInfo(n) : {};
         out.push({
           move: { id, talent, kind, name: {}, data, ...extra },
           label: info?.name ?? f.text,
@@ -316,9 +321,6 @@ function moveFields(cs: CharSheet) {
   ][]) {
     const variant = k.replace(/_vortex\d$/, "");
     if (!/^(lunar|stellar)/.test(variant)) continue;
-    const sub = (n.info?.subVariant ?? (n.operands?.[2] as Field["node"])?.info?.subVariant) as
-      | string
-      | undefined;
     const vortex = k.match(/_vortex(\d)$/)?.[1];
     out.push({
       move: {
@@ -327,7 +329,7 @@ function moveFields(cs: CharSheet) {
         kind: "special",
         name: {},
         data: { value: slim(n) },
-        ...specialInfo(variant, sub),
+        ...specialInfo(n),
       },
       label: undefined,
       suffix: vortex && `(${vortex})`,

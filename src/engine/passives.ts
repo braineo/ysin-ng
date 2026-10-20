@@ -131,7 +131,8 @@ export type Value = number | string | undefined;
 export type Reader = (path: string[]) => Value;
 
 /** Evaluates a GO formula tree; `read` resolves the input paths it refers to. */
-export function evalNode(n: GoNode, read: Reader): Value {
+export function evalNode(n: GoNode | undefined, read: Reader): Value {
+  if (!n) return undefined; // exported data older or newer than this code: treat as empty
   const o = n.operands;
   const ev = (x: GoNode) => evalNode(x, read);
   switch (n.operation) {
