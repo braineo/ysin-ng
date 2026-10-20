@@ -187,6 +187,8 @@ describe('team', () => {
     calculate(hu, homa, sets, { ...defaultBuild(hu), conds, ...build }, team)
   const from = (r: ReturnType<typeof run>, source: string) =>
     r.passives.find((p) => p.source === source)?.buffs ?? []
+  const resonance = (team: TeamMate[]) =>
+    from(run({}, team), 'Elemental Resonance').find((b) => b.key === 'atk%')?.value
 
   test("Bennett's burst adds his base ATK × (burst lv 12 + C1), read from his own build", () => {
     const r = run({}, [bennett])
@@ -204,8 +206,6 @@ describe('team', () => {
 
   test('two Pyro in a party of four: Fervent Flames +25% ATK, not with three members', () => {
     const xiangling = mate('xiangling', 'The Catch', 'Emblem of Severed Fate')
-    const resonance = (team: TeamMate[]) =>
-      from(run({}, team), 'Elemental Resonance').find((b) => b.key === 'atk%')?.value
     expect(resonance([bennett, xiangling, kazuha])).toBeCloseTo(0.25, 6)
     expect(resonance([bennett, kazuha])).toBeUndefined()
   })
