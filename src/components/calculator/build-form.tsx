@@ -3,7 +3,7 @@ import { Field, SelectField, numOptions, type Option } from '#/components/field'
 import { GameIcon, IconLabel } from '#/components/game-icon'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
-import { talentLevel, type Build } from '#/engine/calc'
+import { talentLevel, type Build, type PassiveSource } from '#/engine/calc'
 import {
   CIRCLET,
   DMG_REACTIONS,
@@ -17,6 +17,7 @@ import {
 import type { ArtifactSetData, CharacterData, WeaponData } from '#/engine/types'
 import { useT } from '#/lib/i18n'
 import { cn } from '#/lib/utils'
+import { PassivesCard } from './passives-card'
 
 type Props = {
   char: CharacterData
@@ -24,13 +25,23 @@ type Props = {
   sets: ArtifactSetData[]
   build: Build
   weapon: WeaponData | null
+  passives: PassiveSource[]
   onBuild: (patch: Partial<Build>) => void
   onWeapon: (id: number) => void
 }
 
 const levelLabel = (k: string) => `Lv. ${k}`
 
-export function BuildForm({ char, weapons, sets, build, weapon, onBuild, onWeapon }: Props) {
+export function BuildForm({
+  char,
+  weapons,
+  sets,
+  build,
+  weapon,
+  passives,
+  onBuild,
+  onWeapon,
+}: Props) {
   const t = useT()
   const setOptions: Option[] = [
     { value: 'none', label: t('none') },
@@ -281,6 +292,8 @@ export function BuildForm({ char, weapons, sets, build, weapon, onBuild, onWeapo
           )}
         </CardContent>
       </Card>
+
+      <PassivesCard passives={passives} build={build} onBuild={onBuild} />
 
       <Card>
         <CardHeader>

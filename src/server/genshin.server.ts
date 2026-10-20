@@ -1,6 +1,7 @@
 // genshin-db is ~180 MB of JSON: keep it on the server and send only normalized slices to the client.
 import g, { type Language } from 'genshin-db'
-import { parseTwoPc } from '#/engine/sets'
+import { goKey, type GoSheet } from '#/engine/passives'
+import passives from '#/engine/passives.gen.json'
 import { LEVEL_KEYS, WEAPON_LEVEL_KEYS } from '#/engine/tables'
 import { parseTalent } from '#/engine/talents'
 import type {
@@ -67,6 +68,9 @@ const statsAt = (gdb: Gdb, key: string) =>
   gdb.stats(Number.parseInt(key), key.endsWith('+') ? '+' : '-')
 /** genshin-db's character CRIT ascension values include the base 5% CR / 50% CD the engine adds itself */
 const BASE_SPEC: Partial<Record<string, number>> = { cr: 0.05, cd: 0.5 }
+
+const sheet = (db: Record<string, unknown>, enName: string) =>
+  db[goKey(enName)] as GoSheet | undefined
 
 export const slugOf = (name: string) =>
   name
@@ -172,6 +176,8 @@ export const character = memo((key: string): CharacterData | null => {
       ),
     })),
     boost: { skill: boostOf(tEn.combat2.name), burst: boostOf(tEn.combat3.name) },
+    goKey: goKey(en.name),
+    passives: sheet(passives.chars, en.name),
   }
 })
 
@@ -199,6 +205,8 @@ export const weapons = memo((key: string): WeaponData[] => {
           stats,
           passiveName: local.effectName ?? '',
           passive: [1, 2, 3, 4, 5].map((r) => local[`r${r}`]?.description ?? ''),
+          goKey: goKey(w.name),
+          passives: sheet(passives.weapons, w.name),
         }
       })
   )
@@ -210,11 +218,11 @@ export const artifactSets = memo((lang: string): ArtifactSetData[] =>
     .filter(([a]) => a.effect2Pc && Math.max(...a.rarityList) >= 4)
     .map(([a, local]) => ({
       id: a.id,
-      key: a.name,
       name: local.name,
       ...iconUrl(a.images.filename_flower, a.images.mihoyo_flower),
       twoPc: local.effect2Pc,
       fourPc: local.effect4Pc ?? '',
-      twoPcBuffs: parseTwoPc(a.effect2Pc),
+      goKey: goKey(a.name),
+      passives: sheet(passives.sets, a.name),
     })),
 )

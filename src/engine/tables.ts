@@ -26,7 +26,7 @@ export const TRANS: Record<TransReaction, { coef: number; element: Element }> = 
   superconduct: { coef: 1.5, element: 'cryo' },
   electrocharged: { coef: 2, element: 'electro' },
   shatter: { coef: 3, element: 'physical' },
-  swirl: { coef: 0.6, element: 'anemo' },
+  swirl: { coef: 0.6, element: 'anemo' }, // deals the swirled element's DMG: see calcTransformative
   bloom: { coef: 2, element: 'dendro' },
   hyperbloom: { coef: 3, element: 'dendro' },
   burgeon: { coef: 3, element: 'dendro' },

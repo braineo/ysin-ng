@@ -11,8 +11,7 @@ import {
   TableRow,
 } from '#/components/ui/table'
 import { calculate, focusRow, talentLevel, type Build, type Panel } from '#/engine/calc'
-import { FOUR_PC } from '#/engine/sets'
-import type { ArtifactSetData, CharacterData } from '#/engine/types'
+import type { CharacterData } from '#/engine/types'
 import { useLang, useT } from '#/lib/i18n'
 import type { GamePanel } from '#/lib/store'
 import { cn } from '#/lib/utils'
@@ -44,20 +43,17 @@ export const isPctStat = (k: string) => k !== 'hp' && k !== 'atk' && k !== 'def'
 
 type Props = {
   char: CharacterData
-  sets: ArtifactSetData[]
   build: Build
   result: ReturnType<typeof calculate>
   game?: GamePanel
   onFocus: (id: string) => void
 }
 
-export function Results({ char, sets, build, result, game, onFocus }: Props) {
+export function Results({ char, build, result, game, onFocus }: Props) {
   const t = useT()
-  const lang = useLang()
   const fmt = useFmt()
   const stats = panelStats(result.panel, char.element)
   const focus = focusRow(result.rows, build.focus)
-  const fourPcSet = build.fourPc ? sets.find((s) => s.id === build.sets[0]) : undefined
   const label = (k: string) =>
     k === 'dmg' ? `${t(char.element)} ${t('dmgBonus')}` : k === 'heal' ? t('healBonus') : t(k)
   const show = (k: string, v: number) => (isPctStat(k) ? pct(v) : fmt.format(v))
@@ -213,8 +209,11 @@ export function Results({ char, sets, build, result, game, onFocus }: Props) {
             <CardContent>
               <dl className="space-y-1.5 text-sm">
                 {result.transformative.map((r) => (
-                  <div key={r.reaction} className="flex justify-between">
-                    <dt className="text-muted-foreground">{t(r.reaction)}</dt>
+                  <div key={`${r.reaction}.${r.element}`} className="flex justify-between">
+                    <dt className="text-muted-foreground">
+                      {t(r.reaction)}
+                      {r.reaction === 'swirl' && ` · ${t(r.element)}`}
+                    </dt>
                     <dd className="font-medium tabular-nums">{fmt.format(r.damage)}</dd>
                   </div>
                 ))}
@@ -222,36 +221,6 @@ export function Results({ char, sets, build, result, game, onFocus }: Props) {
             </CardContent>
           </Card>
         )}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('appliedSets')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {result.effects.map((e) => (
-              <p key={`${e.name}${e.pieces}`}>
-                <span className="font-medium">
-                  {e.name} {e.pieces}pc
-                </span>{' '}
-                <span className="text-muted-foreground">
-                  ·{' '}
-                  {e.pieces === 2
-                    ? e.note
-                    : !e.note
-                      ? t('fourPcMissing')
-                      : lang === 'en'
-                        ? e.note
-                        : t('fourPcApplied')}
-                </span>
-              </p>
-            ))}
-            {fourPcSet?.fourPc && (
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {fourPcSet.fourPc}
-                {!FOUR_PC[fourPcSet.key] && ` — ${t('fourPcMissing')}`}
-              </p>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

@@ -60,7 +60,7 @@ function defaults(
     weapons.find((w) => w.rarity === 5 && (w.mainStat === 'cr' || w.mainStat === 'cd')) ??
     weapons[0]
   const melee = char.weapon !== 'bow' && char.weapon !== 'catalyst'
-  const set = sets.find((s) => s.key === (melee ? "Gladiator's Finale" : "Wanderer's Troupe"))
+  const set = sets.find((s) => s.goKey === (melee ? 'GladiatorsFinale' : 'WanderersTroupe'))
   const build = defaultBuild(char)
   build.sets = [set?.id ?? null, null]
   return { build, weaponId: weapon?.id ?? null, name }
@@ -204,6 +204,7 @@ function Calculator() {
             sets={sets}
             build={build}
             weapon={weapon}
+            passives={result.passives}
             onBuild={patch}
             onWeapon={(weaponId) => setState((s) => ({ ...s, weaponId }))}
           />
@@ -225,7 +226,6 @@ function Calculator() {
           )}
           <Results
             char={char}
-            sets={sets}
             build={build}
             result={result}
             game={state.game}
