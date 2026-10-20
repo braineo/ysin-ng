@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const PIN: string = '' // a go-data commit
+const PIN: string = '8ac709510fc3325508bf342d42787fed90c3366d' // a go-data commit
 const OUT = join(import.meta.dir, '../src/engine/passives.gen.json')
 
 if (!PIN) throw new Error('scripts/pull-data.ts: no go-data commit pinned yet')

@@ -2,7 +2,8 @@ import { isPercent } from '#/components/buff-editor'
 import { SelectField } from '#/components/field'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import type { Build, PassiveSource, Toggle } from '#/engine/calc'
-import type { Buff } from '#/engine/types'
+import { ELEMENTS } from '#/engine/tables'
+import type { Buff, Element } from '#/engine/types'
 import { useLang, useT } from '#/lib/i18n'
 import { pct, useFmt } from './results'
 
@@ -23,7 +24,13 @@ export function PassivesCard({ passives, build, onBuild }: Props) {
   const t = useT()
   const lang = useLang()
   const fmt = useFmt()
-  const label = (c: Toggle) => c.labels[lang]?.name ?? c.labels.en?.name ?? humanize(c.id)
+  // GO's per-element pickers (VV, Kazuha, …) have no label of their own: name the element
+  const label = (c: Toggle) =>
+    c.labels[lang]?.name ??
+    c.labels.en?.name ??
+    (c.states.length === 1 && ELEMENTS.includes(c.states[0] as Element)
+      ? t(c.states[0] as Element)
+      : humanize(c.id))
   const stateLabel = (c: Toggle, s: string) =>
     c.labels[lang]?.states?.[s] ?? c.labels.en?.states?.[s] ?? s
   const setCond = (id: string, value: string) => onBuild({ conds: { ...build.conds, [id]: value } })
