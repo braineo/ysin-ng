@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: go-data
-  cancel-in-progress: true
+  cancel-in-progress: false # runs from different branches publish one after another
 
 jobs:
   export:

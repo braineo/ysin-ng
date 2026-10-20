@@ -112,6 +112,8 @@ const consts = await import(join(GO, 'libs/gi/consts/src/index.ts'))
 // GO's own React and i18n instance, so its <Translate> label elements render exactly as on its site
 const { renderToStaticMarkup } = await import(join(GO, 'node_modules/react-dom/server.js'))
 const { i18n } = await import(join(GO, 'libs/gi/i18n/src/index.ts'))
+// field names live in a registry keyed by the node's info path (see infoMut in libs/gi/wr)
+const { infoManager } = await import(join(GO, 'libs/gi/wr/src/index.ts'))
 const LANGS = { en: 'en', zh: 'chs' } as const
 for (const lng of Object.values(LANGS))
   for (const lib of ['common/localization', 'gi/localization', 'gi/dm-localization']) {
@@ -187,7 +189,7 @@ async function labels(sheet: unknown, conds: GoSheet['conds']) {
 }
 
 type Field = {
-  node?: GoNode & { data?: object; info?: { name?: unknown; variant?: string } }
+  node?: GoNode & { data?: object; info?: { path?: string; variant?: string } }
   text?: unknown
 }
 type CharSheet = {
@@ -225,7 +227,7 @@ function moveFields(cs: CharSheet) {
       else if (v && typeof v === 'object') index(v as Record<string, unknown>, `${p}${k}.`)
   }
   index(cs.data.display, '')
-  const out: { move: GoMove; label: unknown }[] = []
+  const out: { move: GoMove; label: unknown; suffix?: string }[] = []
   const seen = new Set<string>()
   for (const [talent, t] of Object.entries(cs.sheet))
     for (const s of t?.sections ?? [])
@@ -241,7 +243,12 @@ function moveFields(cs: CharSheet) {
         seen.add(id)
         const data =
           kind === 'damage' ? flatten(n.data ?? {}) : kind === 'lunar' ? {} : { value: slim(n) }
-        out.push({ move: { id, talent, kind, name: {}, data }, label: n.info?.name ?? f.text })
+        const info = n.info?.path ? infoManager[n.info.path] : undefined
+        out.push({
+          move: { id, talent, kind, name: {}, data },
+          label: info?.name ?? f.text,
+          suffix: info?.textSuffix,
+        })
       }
   return out
 }
@@ -273,7 +280,10 @@ async function collect(
     if (moves.length) {
       for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
         await i18n.changeLanguage(lng)
-        for (const m of moves) m.move.name[lang] = text(m.label)
+        for (const m of moves) {
+          const name = text(m.label)
+          m.move.name[lang] = name && m.suffix ? `${name} ${m.suffix}` : name
+        }
       }
       s.moves = moves.map((m) => m.move)
       s.talents = talentNames(k)
