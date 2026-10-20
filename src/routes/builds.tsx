@@ -1,13 +1,13 @@
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Download, GitCompareArrows, Pencil, Trash2, Upload } from 'lucide-react'
-import { useRef, useState } from 'react'
-import { useFmt } from '#/components/calculator/results'
-import { ELEMENT_BG, GameIcon } from '#/components/game-icon'
-import { Badge } from '#/components/ui/badge'
-import { Button } from '#/components/ui/button'
-import { Card, CardContent } from '#/components/ui/card'
-import { Input } from '#/components/ui/input'
-import { useLang, useT } from '#/lib/i18n'
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Download, GitCompareArrows, Pencil, Trash2, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { useFmt } from "#/components/calculator/results";
+import { ELEMENT_BG, GameIcon } from "#/components/game-icon";
+import { Badge } from "#/components/ui/badge";
+import { Button } from "#/components/ui/button";
+import { Card, CardContent } from "#/components/ui/card";
+import { Input } from "#/components/ui/input";
+import { useLang, useT } from "#/lib/i18n";
 import {
   deleteBuild,
   getBuilds,
@@ -15,63 +15,63 @@ import {
   renameBuild,
   useBuilds,
   type SavedBuild,
-} from '#/lib/store'
-import { cn } from '#/lib/utils'
-import { getRoster } from '#/server/fns'
+} from "#/lib/store";
+import { cn } from "#/lib/utils";
+import { getRoster } from "#/server/fns";
 
-export const Route = createFileRoute('/builds')({
-  loaderDeps: ({ search }) => ({ lang: search.lang ?? ('en' as const) }),
+export const Route = createFileRoute("/builds")({
+  loaderDeps: ({ search }) => ({ lang: search.lang ?? ("en" as const) }),
   loader: ({ deps }) => getRoster({ data: { lang: deps.lang } }),
-  head: () => ({ meta: [{ title: 'My builds · Ysin NG' }] }),
+  head: () => ({ meta: [{ title: "My builds · Ysin NG" }] }),
   component: Builds,
-})
+});
 
-const MAX_COMPARE = 4
+const MAX_COMPARE = 4;
 
 function exportAll() {
-  const blob = new Blob([JSON.stringify(getBuilds(), null, 2)], { type: 'application/json' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `ysin-ng-builds-${new Date().toISOString().slice(0, 10)}.json`
-  a.click()
-  URL.revokeObjectURL(a.href)
+  const blob = new Blob([JSON.stringify(getBuilds(), null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `ysin-ng-builds-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function Builds() {
-  const roster = Route.useLoaderData()
-  const builds = useBuilds()
-  const t = useT()
-  const navigate = useNavigate()
-  const [selected, setSelected] = useState<string[]>([])
-  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
-  const file = useRef<HTMLInputElement>(null)
-  const people = new Map(roster.map((c) => [c.slug, c]))
+  const roster = Route.useLoaderData();
+  const builds = useBuilds();
+  const t = useT();
+  const navigate = useNavigate();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const file = useRef<HTMLInputElement>(null);
+  const people = new Map(roster.map((c) => [c.slug, c]));
 
-  const groups = new Map<string, SavedBuild[]>()
-  for (const b of builds) groups.set(b.slug, [...(groups.get(b.slug) ?? []), b])
+  const groups = new Map<string, SavedBuild[]>();
+  for (const b of builds) groups.set(b.slug, [...(groups.get(b.slug) ?? []), b]);
   const toggle = (id: string) =>
     setSelected((s) =>
       s.includes(id) ? s.filter((x) => x !== id) : s.length < MAX_COMPARE ? [...s, id] : s,
-    )
+    );
 
   async function importFile(f: File) {
     try {
-      const n = importBuilds(JSON.parse(await f.text()))
-      setNotice({ ok: true, text: t('importedN', { n }) })
+      const n = importBuilds(JSON.parse(await f.text()));
+      setNotice({ ok: true, text: t("importedN", { n }) });
     } catch {
-      setNotice({ ok: false, text: t('importFailed') })
+      setNotice({ ok: false, text: t("importFailed") });
     }
   }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto font-display text-2xl font-bold">{t('myBuilds')}</h1>
+        <h1 className="mr-auto font-display text-2xl font-bold">{t("myBuilds")}</h1>
         <Button variant="outline" size="sm" onClick={exportAll} disabled={!builds.length}>
-          <Download /> {t('exportJson')}
+          <Download /> {t("exportJson")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => file.current?.click()}>
-          <Upload /> {t('importJson')}
+          <Upload /> {t("importJson")}
         </Button>
         <input
           ref={file}
@@ -80,40 +80,40 @@ function Builds() {
           accept="application/json,.json"
           className="hidden"
           onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) void importFile(f)
-            e.target.value = ''
+            const f = e.target.files?.[0];
+            if (f) void importFile(f);
+            e.target.value = "";
           }}
         />
         <Button
           size="sm"
           disabled={selected.length < 2}
           onClick={() =>
-            navigate({ to: '/compare', search: (s) => ({ ...s, ids: selected.join(',') }) })
+            navigate({ to: "/compare", search: (s) => ({ ...s, ids: selected.join(",") }) })
           }
         >
-          <GitCompareArrows /> {t('compareN', { n: selected.length })}
+          <GitCompareArrows /> {t("compareN", { n: selected.length })}
         </Button>
       </div>
       {notice && (
-        <p className={cn('text-sm', notice.ok ? 'text-muted-foreground' : 'text-destructive')}>
+        <p className={cn("text-sm", notice.ok ? "text-muted-foreground" : "text-destructive")}>
           {notice.text}
         </p>
       )}
-      {builds.length > 0 && <p className="text-xs text-muted-foreground">{t('selectToCompare')}</p>}
+      {builds.length > 0 && <p className="text-xs text-muted-foreground">{t("selectToCompare")}</p>}
 
       {builds.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            {t('noBuilds')}{' '}
+            {t("noBuilds")}{" "}
             <Link to="/import" className="text-primary underline">
-              {t('import')}
+              {t("import")}
             </Link>
           </CardContent>
         </Card>
       ) : (
         [...groups].map(([slug, list]) => {
-          const c = people.get(slug)
+          const c = people.get(slug);
           return (
             <section key={slug} className="space-y-2">
               <h2 className="flex items-center gap-2 font-semibold">
@@ -126,7 +126,7 @@ function Builds() {
                   />
                 )}
                 {c?.name ?? slug}
-                {c && <span className={cn('size-2 rounded-full', ELEMENT_BG[c.element])} />}
+                {c && <span className={cn("size-2 rounded-full", ELEMENT_BG[c.element])} />}
               </h2>
               <ul className="grid gap-2 md:grid-cols-2">
                 {list.map((b) => (
@@ -139,11 +139,11 @@ function Builds() {
                 ))}
               </ul>
             </section>
-          )
+          );
         })
       )}
     </div>
-  )
+  );
 }
 
 function BuildRow({
@@ -151,23 +151,23 @@ function BuildRow({
   checked,
   onToggle,
 }: {
-  b: SavedBuild
-  checked: boolean
-  onToggle: () => void
+  b: SavedBuild;
+  checked: boolean;
+  onToggle: () => void;
 }) {
-  const t = useT()
-  const fmt = useFmt()
-  const lang = useLang()
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(b.name)
-  const [confirm, setConfirm] = useState(false)
-  const date = new Date(b.updatedAt).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en')
+  const t = useT();
+  const fmt = useFmt();
+  const lang = useLang();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(b.name);
+  const [confirm, setConfirm] = useState(false);
+  const date = new Date(b.updatedAt).toLocaleDateString(lang === "zh" ? "zh-CN" : "en");
 
   return (
     <li
       className={cn(
-        'flex gap-3 rounded-lg border bg-card p-3',
-        checked && 'border-primary ring-1 ring-primary',
+        "flex gap-3 rounded-lg border bg-card p-3",
+        checked && "border-primary ring-1 ring-primary",
       )}
     >
       <input
@@ -182,19 +182,19 @@ function BuildRow({
           <form
             className="flex gap-1"
             onSubmit={(e) => {
-              e.preventDefault()
-              if (name.trim()) renameBuild(b.id, name.trim())
-              setEditing(false)
+              e.preventDefault();
+              if (name.trim()) renameBuild(b.id, name.trim());
+              setEditing(false);
             }}
           >
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              aria-label={t('rename')}
+              aria-label={t("rename")}
               className="h-8"
             />
             <Button size="sm" type="submit">
-              {t('save')}
+              {t("save")}
             </Button>
           </form>
         ) : (
@@ -207,7 +207,7 @@ function BuildRow({
             >
               {b.name}
             </Link>
-            {b.source && <Badge variant="outline">{t('fromUid', { uid: b.source.uid })}</Badge>}
+            {b.source && <Badge variant="outline">{t("fromUid", { uid: b.source.uid })}</Badge>}
           </div>
         )}
         {b.summary && (
@@ -221,7 +221,7 @@ function BuildRow({
             </p>
             {b.summary.focusValue > 0 && (
               <p>
-                {b.summary.focusLabel}:{' '}
+                {b.summary.focusLabel}:{" "}
                 <span className="font-semibold text-foreground tabular-nums">
                   {fmt.format(b.summary.focusValue)}
                 </span>
@@ -236,21 +236,21 @@ function BuildRow({
           size="icon"
           variant="ghost"
           className="size-7"
-          aria-label={t('rename')}
+          aria-label={t("rename")}
           onClick={() => setEditing((v) => !v)}
         >
           <Pencil className="size-3.5" />
         </Button>
         {confirm ? (
           <Button size="sm" variant="destructive" onClick={() => deleteBuild(b.id)}>
-            {t('confirmDelete')}
+            {t("confirmDelete")}
           </Button>
         ) : (
           <Button
             size="icon"
             variant="ghost"
             className="size-7"
-            aria-label={t('delete')}
+            aria-label={t("delete")}
             onClick={() => setConfirm(true)}
           >
             <Trash2 className="size-3.5" />
@@ -258,5 +258,5 @@ function BuildRow({
         )}
       </div>
     </li>
-  )
+  );
 }
