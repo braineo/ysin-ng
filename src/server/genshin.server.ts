@@ -3,7 +3,6 @@ import g, { type Language } from 'genshin-db'
 import { goKey, type GoSheet } from '#/engine/passives'
 import passives from '#/engine/passives.gen.json'
 import { LEVEL_KEYS, WEAPON_LEVEL_KEYS } from '#/engine/tables'
-import { parseTalent } from '#/engine/talents'
 import type {
   ArtifactSetData,
   CharacterData,
@@ -131,6 +130,7 @@ export const character = memo((key: string): CharacterData | null => {
   const element = ELEMENT[en.elementType]
   const weapon = WEAPON[en.weaponType]
   const asc = prop(en.substatType)
+  const go = sheet(passives.chars, en.name)
 
   const stats: CharacterData['stats'] = {}
   for (const lv of LEVEL_KEYS) {
@@ -166,18 +166,16 @@ export const character = memo((key: string): CharacterData | null => {
       key: talent,
       name: tLocal[combat].name,
       icon: iconUrl(tEn.images[`filename_${combat}`]).icon,
-      rows: parseTalent(
-        talent,
-        tEn[combat].attributes.labels,
-        tLocal[combat].attributes.labels,
-        tEn[combat].attributes.parameters,
-        element,
-        weapon,
-      ),
     })),
     boost: { skill: boostOf(tEn.combat2.name), burst: boostOf(tEn.combat3.name) },
     goKey: goKey(en.name),
-    passives: sheet(passives.chars, en.name),
+    // the damage table comes from GO; the client only needs names in this page's language
+    moves: (go?.moves ?? []).map(({ name, ...m }) => ({
+      ...m,
+      label: name[lang] ?? name.en ?? m.id,
+      group: go?.talents?.[m.talent]?.[lang] ?? go?.talents?.[m.talent]?.en ?? m.talent,
+    })),
+    passives: go && { nodes: go.nodes, conds: go.conds, labels: go.labels },
   }
 })
 

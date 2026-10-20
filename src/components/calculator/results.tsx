@@ -38,6 +38,12 @@ export function panelStats(p: Panel, element: string): GamePanel & Record<string
     heal: p.heal,
   }
 }
+/** GO sheet sections that have a talent level */
+const LEVELED: Partial<Record<string, 'normal' | 'skill' | 'burst'>> = {
+  auto: 'normal',
+  skill: 'skill',
+  burst: 'burst',
+}
 export const STAT_ROWS = ['hp', 'atk', 'def', 'em', 'cr', 'cd', 'er', 'dmg', 'heal'] as const
 export const isPctStat = (k: string) => k !== 'hp' && k !== 'atk' && k !== 'def' && k !== 'em'
 
@@ -129,16 +135,18 @@ export function Results({ char, build, result, game, onFocus }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {char.talents.map((tal) => {
-                const rows = result.rows.filter((r) => r.id.startsWith(`${tal.key}.`))
-                if (!rows.length) return null
+              {[...new Set(result.rows.map((r) => r.talent))].map((talent) => {
+                const rows = result.rows.filter((r) => r.talent === talent)
+                const lv = LEVELED[talent]
                 return [
-                  <TableRow key={tal.key} className="bg-muted/50 hover:bg-muted/50">
+                  <TableRow key={talent} className="bg-muted/50 hover:bg-muted/50">
                     <TableCell colSpan={6} className="font-semibold">
-                      {tal.name}{' '}
-                      <span className="font-normal text-muted-foreground">
-                        · Lv. {talentLevel(char, build, tal.key)}
-                      </span>
+                      {rows[0].group}{' '}
+                      {lv && (
+                        <span className="font-normal text-muted-foreground">
+                          · Lv. {talentLevel(char, build, lv)}
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>,
                   ...rows.map((r) => {

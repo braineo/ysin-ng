@@ -7,7 +7,7 @@ import { SUB_KEYS, type SubKey } from './tables'
 const char = character('hu-tao|en')!
 const weapon = weapons('polearm|en').find((w) => w.name === 'Staff of Homa')!
 const sets = artifactSets('en')
-const build: Build = { ...defaultBuild(char), reaction: 'vaporize', focus: 'normal.6.0' } // charged attack
+const build: Build = { ...defaultBuild(char), reaction: 'vaporize', focus: 'charged.dmg' } // charged attack
 
 const score = (b: Build) => focusRow(calculate(char, weapon, sets, b).rows, b.focus)!.avg
 

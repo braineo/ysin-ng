@@ -93,7 +93,7 @@ export function RatingCard({ char, build, rows, rating }: Props) {
       <CardHeader>
         <CardTitle>{t('rating')}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {target && t('ratingTarget', { target: `${target.talent} · ${target.label}` })} ·{' '}
+          {target && t('ratingTarget', { target: `${target.group} · ${target.label}` })} ·{' '}
           {t('ratingHint')}
         </p>
       </CardHeader>

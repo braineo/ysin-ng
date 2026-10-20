@@ -1,4 +1,4 @@
-import type { GoSheet } from './passives'
+import type { GoMove, GoSheet } from './passives'
 
 export type Element =
   | 'pyro'
@@ -57,17 +57,8 @@ export type Buff = {
   source: string
 }
 
-/** One summand of a talent value: `mult[level-1] × stat`, or a flat number when `stat` is absent. */
-export type Term = { stat?: ScalingStat; values: number[]; count: number }
-
-export type TalentRow = {
-  label: string
-  attack: AttackKey
-  kind: 'damage' | 'heal' | 'shield' | 'lunar'
-  element: Element
-  /** `/`-separated alternatives in the game text, e.g. Low / High plunge. */
-  variants: { terms: Term[]; count: number }[]
-}
+/** A damage-table row: GO's move with its name and talent-section name in the page's language. */
+export type Move = Omit<GoMove, 'name'> & { label: string; group: string }
 
 export type CharacterData = {
   slug: string
@@ -81,7 +72,8 @@ export type CharacterData = {
   ascensionElement?: Element
   /** keyed by level label, e.g. "90", "80+" */
   stats: Record<string, { hp: number; atk: number; def: number; spec: number }>
-  talents: { key: 'normal' | 'skill' | 'burst'; name: string; icon: string; rows: TalentRow[] }[]
+  talents: { key: 'normal' | 'skill' | 'burst'; name: string; icon: string }[]
+  moves: Move[]
   /** +3 talent level from C3 / C5 */
   boost: { skill: number; burst: number }
   /** Genshin Optimizer key ("HuTao") and passives / constellations */

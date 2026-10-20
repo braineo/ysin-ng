@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { artifactSets, character, weapons } from '#/server/genshin.server'
 import { buildPanel, calculate, defMult, defaultBuild, resMult, type Build } from './calc'
 import { SUB_KEYS } from './tables'
-import { attackKey, parseValue } from './talents'
 import type { CharacterData, TransReaction } from './types'
 
 describe('multipliers', () => {
@@ -12,41 +11,6 @@ describe('multipliers', () => {
     expect(resMult(-0.2)).toBeCloseTo(1.1)
     expect(resMult(0.75)).toBeCloseTo(0.25) // continuous at 75%, unlike Ysin's 1/(1+3r)
   })
-})
-
-describe('talent label parser', () => {
-  const p = { param1: [0.5, 0.6], param2: [1, 2], param3: [100, 200] }
-  test('plain percent = ATK', () =>
-    expect(parseValue('{param1:F1P}', p)).toEqual([
-      { count: 1, terms: [{ stat: 'atk', values: [0.5, 0.6], count: 1 }] },
-    ]))
-  test('grouped multi-stat with count', () => {
-    const v = parseValue('({param1:F1P} ATK+{param2:F1P} Elemental Mastery)×3', p)!
-    expect(v[0].count).toBe(3)
-    expect(v[0].terms.map((t) => t.stat)).toEqual(['atk', 'em'])
-  })
-  test('variants inherit trailing stat', () =>
-    expect(parseValue('{param1:F1P}/{param2:F1P} Max HP', p)!.map((v) => v.terms[0].stat)).toEqual([
-      'hp',
-      'hp',
-    ]))
-  test('flat heal term', () =>
-    expect(parseValue('{param1:P} Max HP+{param3:I}', p)![0].terms.map((t) => t.stat)).toEqual([
-      'hp',
-      undefined,
-    ]))
-  test('per-term repeat', () =>
-    expect(parseValue('{param1:F1P}×2+{param2:F1P}×2', p)![0].terms.map((t) => t.count)).toEqual([
-      2, 2,
-    ]))
-  test('named bow shots are charged attacks', () =>
-    expect(
-      ['Frostflake Arrow DMG', 'Breakthrough Barb DMG', 'Kindling Arrow DMG'].map((n) =>
-        attackKey('normal', n),
-      ),
-    ).toEqual(['charged', 'charged', 'normal']))
-  test('units are not damage', () =>
-    expect(parseValue('{param1:F1P} Max HP/Droplet', p)).toBeNull())
 })
 
 // Ysin parity: each build below was also run through Ysin's own engine (analysis/tools/parity.js), with
@@ -73,6 +37,7 @@ describe('Ysin parity', () => {
     ysin: { hp: number; atk: number; em: number; cr: number; cd: number; er: number; avg: number }
     trans?: [TransReaction, number]
   }
+  const A1 = 0.2 // Ganyu A1: Ysin adds it to the panel, ysin-ng (like GO) only to the Frostflake rows
   const cases: Case[] = [
     {
       name: 'Ganyu frostflake (ATK, Amos)',
@@ -82,12 +47,10 @@ describe('Ysin parity', () => {
       mains: { sands: 'atk%', goblet: 'dmg', circlet: 'cd' },
       rolls: { 'atk%': 4, cr: 9, cd: 9, er: 3 },
       build: {
-        conds: { 'AmosBow.StrongWilled': '5', 'BlizzardStrayer.state': 'frozen' },
-        // shortcut: GO keeps per-hit passives in its damage formulas, not imported yet; drop once they are
-        custom: [{ key: 'cr', value: 0.2, source: 'A1 (frostflake only)' }],
+        conds: { 'AmosBow.StrongWilled': '5', 'BlizzardStrayer.state': 'frozen', 'Ganyu.A1': 'on' },
       },
-      rows: ['normal.8.0', 'normal.9.0'],
-      ysin: { hp: 14577, atk: 2348.3, em: 0, cr: 0.9479, cd: 2.1018, er: 1.1653, avg: 39714 },
+      rows: ['charged.frostflake', 'charged.frostflakeBloom'],
+      ysin: { hp: 14577, atk: 2348.3, em: 0, cr: 0.9479 - A1, cd: 2.1018, er: 1.1653, avg: 39714 },
     },
     {
       name: 'Ganyu frostflake melt',
@@ -98,23 +61,20 @@ describe('Ysin parity', () => {
       rolls: { 'atk%': 4, em: 3, cr: 9, cd: 9 },
       build: {
         reaction: 'melt',
-        conds: { 'AmosBow.StrongWilled': '5', 'BlizzardStrayer.state': 'frozen' },
-        // shortcut: GO keeps per-hit passives in its damage formulas, not imported yet; drop once they are
-        custom: [{ key: 'cr', value: 0.2, source: 'A1 (frostflake only)' }],
+        conds: { 'AmosBow.StrongWilled': '5', 'BlizzardStrayer.state': 'frozen', 'Ganyu.A1': 'on' },
       },
-      rows: ['normal.8.0', 'normal.9.0'],
-      ysin: { hp: 14577, atk: 2348.3, em: 59.5, cr: 0.9479, cd: 2.1018, er: 1, avg: 66318 },
+      rows: ['charged.frostflake', 'charged.frostflakeBloom'],
+      ysin: { hp: 14577, atk: 2348.3, em: 59.5, cr: 0.9479 - A1, cd: 2.1018, er: 1, avg: 66318 },
     },
     {
-      // Ysin's core is one throw; ysin-ng's row is the 3-arrow volley
       name: 'Yelan burst (HP, Emblem from ER)',
       slug: 'yelan',
       weapon: 'Favonius Warbow',
       sets: ['Emblem of Severed Fate'],
       mains: { sands: 'hp%', goblet: 'dmg', circlet: 'cr' },
       rolls: { 'hp%': 4, cr: 9, cd: 9, er: 3 },
-      rows: ['burst.1.0'],
-      ysin: { hp: 29697.6, atk: 1009, em: 0, cr: 0.8509, cd: 1.0958, er: 1.9783, avg: 4192 * 3 },
+      rows: ['burst.throwDmg'],
+      ysin: { hp: 29697.6, atk: 1009, em: 0, cr: 0.8509, cd: 1.0958, er: 1.9783, avg: 4192 },
     },
     {
       name: 'Hu Tao charged vaporize (HP → ATK)',
@@ -132,7 +92,7 @@ describe('Ysin parity', () => {
           'ShimenawasReminiscence.usedEnergy': 'used',
         },
       },
-      rows: ['normal.6.0'],
+      rows: ['charged.dmg'],
       ysin: { hp: 33775.1, atk: 3880.7, em: 59.5, cr: 0.6589, cd: 2.1418, er: 1, avg: 36922 },
     },
     {
@@ -143,7 +103,7 @@ describe('Ysin parity', () => {
       mains: { sands: 'atk%', goblet: 'dmg', circlet: 'cr' },
       rolls: { 'atk%': 4, em: 3, cr: 9, cd: 9 },
       build: { reaction: 'aggravate' },
-      rows: ['skill.0.0'],
+      rows: ['skill.ozDmg'],
       ysin: { hp: 13969, atk: 2224.5, em: 59.5, cr: 0.8799, cd: 1.2958, er: 1, avg: 8427 },
       trans: ['hyperbloom', 5711],
     },
@@ -156,7 +116,7 @@ describe('Ysin parity', () => {
       mains: { sands: 'er', goblet: 'em', circlet: 'em' },
       rolls: { em: 6, er: 3 },
       build: { conds: { 'ViridescentVenerer.swirlhydro': 'hydro' } }, // swirl is listed Hydro first
-      rows: ['skill.0.0'],
+      rows: ['skill.press'],
       ysin: { hp: 14024, atk: 935, em: 712.9, cr: 0.05, cd: 0.5, er: 1.6833, avg: 2152 },
       trans: ['swirl', 5795],
     },

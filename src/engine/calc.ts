@@ -1,4 +1,13 @@
-import { buffOf, evaluatePassives, type GoLabel, type GoSheet } from './passives'
+import {
+  buffOf,
+  evalNode,
+  evaluatePassives,
+  type GoLabel,
+  type GoMove,
+  type GoNode,
+  type GoSheet,
+  type Reader,
+} from './passives'
 import {
   DMG_REACTIONS,
   MAIN_STAT,
@@ -21,7 +30,6 @@ import type {
   Reaction,
   ScalingStat,
   StatKey,
-  TalentRow,
   TransReaction,
   WeaponData,
 } from './types'
@@ -138,11 +146,21 @@ export function defaultBuild(char: CharacterData): Build {
 /** Most common scaling stat across skill and burst damage rows. */
 export function scalingStat(char: CharacterData): ScalingStat {
   const count: Record<ScalingStat, number> = { atk: 0, hp: 0, def: 0, em: 0 }
-  for (const t of char.talents)
-    for (const r of t.rows)
-      if (r.kind === 'damage' && t.key !== 'normal')
-        for (const v of r.variants) for (const term of v.terms) if (term.stat) count[term.stat]++
+  const walk = (n: GoNode) => {
+    const stat = n.operation === 'read' && GO_STAT[n.path!.slice(1).join('.')]
+    if (stat) count[stat]++
+    n.operands.forEach(walk)
+  }
+  for (const m of char.moves)
+    if (m.kind === 'damage' && (m.talent === 'skill' || m.talent === 'burst') && m.data['hit.base'])
+      walk(m.data['hit.base'])
   return (Object.entries(count).toSorted((a, b) => b[1] - a[1])[0][0] as ScalingStat) ?? 'atk'
+}
+const GO_STAT: Partial<Record<string, ScalingStat>> = {
+  atk: 'atk',
+  hp: 'hp',
+  def: 'def',
+  eleMas: 'em',
 }
 
 /** Equipped sets: the same id twice (or a lone first id with `fourPc`) = 4-piece. */
@@ -250,7 +268,7 @@ export function collectBuffs(
     toggles: toggles[i],
     buffs: go.buffs.filter((b) => b.source === source),
   }))
-  return { buffs: [...buffs, ...go.buffs], passives, infusion: go.infusion }
+  return { buffs: [...buffs, ...go.buffs], passives, infusion: go.infusion, read: go.read }
 }
 
 export function buildPanel(
@@ -300,12 +318,15 @@ export function defMult(charLevel: number, enemyLevel: number, shred: number, ig
 }
 
 export type HitResult = {
-  /** stable across languages: "<talent>.<row>.<variant>" */
+  /** GO's row id, stable across languages, e.g. "charged.frostflake" */
   id: string
   label: string
+  /** GO sheet section (auto, skill, burst, passive1, constellation2, ...) and its name */
+  talent: string
+  group: string
   attack: AttackKey
   element: Element
-  kind: TalentRow['kind']
+  kind: GoMove['kind']
   formula: string
   reaction?: Reaction
   /** heal / shield amount, or damage without crit */
@@ -316,6 +337,26 @@ export type HitResult = {
 
 const STAT_LABEL: Record<ScalingStat, string> = { atk: 'ATK', hp: 'HP', def: 'DEF', em: 'EM' }
 const pct = (v: number) => `${+(v * 100).toFixed(2)}%`
+const MOVE: Record<string, AttackKey> = {
+  normal: 'normal',
+  charged: 'charged',
+  plunging: 'plunge',
+  plunging_collision: 'plunge',
+  plunging_impact: 'plunge',
+  skill: 'skill',
+  burst: 'burst',
+}
+const PANEL_STAT: Partial<Record<string, keyof Panel>> = {
+  hp: 'hp',
+  atk: 'atk',
+  def: 'def',
+  eleMas: 'em',
+  enerRech_: 'er',
+  critRate_: 'cr',
+  critDMG_: 'cd',
+  heal_: 'heal',
+  shield_: 'shield',
+}
 
 export function talentLevel(
   char: CharacterData,
@@ -328,94 +369,127 @@ export function talentLevel(
   return lv + (c && build.cons >= c ? 3 : 0)
 }
 
+/** "128% ATK + 40% EM" for a GO base-damage formula; '' when it is not a plain sum of stat multiples */
+function formulaText(n: GoNode, read: Reader): string {
+  if (n.operation === 'add')
+    return n.operands
+      .map((o) => formulaText(o, read))
+      .filter(Boolean)
+      .join(' + ')
+  if (n.operation !== 'mul') return ''
+  const stat = n.operands.find((o) => o.operation === 'read' && GO_STAT[o.path![1]])
+  if (!stat) return ''
+  const k = n.operands.reduce((s, o) => (o === stat ? s : s * Number(evalNode(o, read) ?? 0)), 1)
+  return `${pct(k)} ${STAT_LABEL[GO_STAT[stat.path![1]]!]}`
+}
+
+/** One row per GO damage / heal / shield field, computed with Ysin's damage formula. */
 export function calcRows(
   char: CharacterData,
   panel: Panel,
   build: Build,
-): (HitResult & { talent: string })[] {
-  const b = panel.buffs
+  read: Reader,
+): HitResult[] {
   const charLevel = Number.parseInt(build.level)
-  const statValue = (s: ScalingStat) => (s === 'em' ? panel.em : panel[s])
   const ampEntry =
     build.reaction === 'none'
       ? undefined
       : DMG_REACTIONS[char.element]?.find((r) => r.reaction === build.reaction)
-  const out: (HitResult & { talent: string })[] = []
-
-  for (const t of char.talents) {
-    const idx = talentLevel(char, build, t.key) - 1
-    for (const [ri, row] of t.rows.entries()) {
-      const element = build.infusion && row.element === 'physical' ? char.element : row.element
-      row.variants.forEach((v, vi) => {
-        let base = 0
-        const parts: string[] = []
-        for (const term of v.terms) {
-          const val = term.values[Math.min(idx, term.values.length - 1)] * term.count * v.count
-          base += term.stat ? val * statValue(term.stat) : val
-          parts.push(term.stat ? `${pct(val)} ${STAT_LABEL[term.stat]}` : `${+val.toFixed(0)}`)
-        }
-        const label = row.variants.length > 1 ? `${row.label} #${vi + 1}` : row.label
-        const common = {
-          id: `${t.key}.${ri}.${vi}`,
-          talent: t.name,
-          label,
-          attack: row.attack,
-          element,
-          kind: row.kind,
-          formula: parts.join(' + '),
-        }
-        if (row.kind === 'heal' || row.kind === 'shield') {
-          const amount = base * (1 + (row.kind === 'heal' ? panel.heal : panel.shield))
-          out.push({ ...common, nonCrit: amount, crit: amount, avg: amount })
-          return
-        }
-        if (row.kind === 'lunar') {
-          out.push({ ...common, nonCrit: Number.NaN, crit: Number.NaN, avg: Number.NaN })
-          return
-        }
-        const hits = v.count * v.terms.reduce((n, term) => Math.max(n, term.count), 1)
-        base += hits * (sum(b, 'flat') + sum(b, 'flat', row.attack) + sum(b, 'flat', element))
-
-        let amp = 1
-        let reaction: Reaction | undefined
-        if (ampEntry && element === char.element) {
-          reaction = ampEntry.reaction
-          const em = panel.em
-          if (reaction === 'aggravate' || reaction === 'spread') {
-            base +=
-              hits *
-              levelMult(charLevel) *
-              ampEntry.mult *
-              (1 + (5 * em) / (em + 1200) + sum(b, 'react', reaction))
-          } else {
-            amp = ampEntry.mult * (1 + (2.78 * em) / (em + 1400) + sum(b, 'react', reaction))
-          }
-        }
-        const dmg = 1 + sum(b, 'dmg') + sum(b, 'dmg', element) + sum(b, 'dmg', row.attack)
-        const def = defMult(
-          charLevel,
-          build.enemyLevel,
-          sum(b, 'defShred'),
-          sum(b, 'defIgnore') + sum(b, 'defIgnore', row.attack),
-        )
-        const res = resMult(build.enemyRes - sum(b, 'res', element))
-        const cr = Math.min(
-          Math.max(panel.cr + sum(b, 'cr', element) + sum(b, 'cr', row.attack), 0),
-          1,
-        )
-        const cd = cr === 0 ? 0 : panel.cd + sum(b, 'cd', element) + sum(b, 'cd', row.attack)
-        const nonCrit = base * dmg * def * res * amp
-        out.push({
-          ...common,
-          reaction,
-          nonCrit,
-          crit: nonCrit * (1 + cd),
-          avg: nonCrit * (1 + cr * cd),
-        })
-      })
+  // stat reads inside a row's formulas come from the (row's) panel; everything else from the build
+  const reader = (p: Panel, data: GoMove['data']): Reader => {
+    const self: Reader = (path) => {
+      const key = path.join('.')
+      if (key in data && !key.startsWith('premod.')) return evalNode(data[key], self)
+      if (path.length === 2 && path[0] === 'base') return p.base[path[1] as keyof Panel['base']]
+      if (path.length === 2 && (path[0] === 'total' || path[0] === 'premod')) {
+        const f = PANEL_STAT[path[1]]
+        if (f) return p[f] as number
+        const b = buffOf(path[1])
+        if (b) return sum(p.buffs, b.key, b.on)
+      }
+      return read(path) // talent levels (total.skillIndex), toggles, infusion, ...
     }
+    return self
   }
-  return out
+  return char.moves.map((m): HitResult => {
+    const common = { id: m.id, label: m.label, talent: m.talent, group: m.group, kind: m.kind }
+    const base0 = reader(panel, m.data)
+    if (m.kind === 'lunar')
+      return {
+        ...common,
+        attack: 'skill',
+        element: char.element,
+        formula: '',
+        nonCrit: Number.NaN,
+        crit: Number.NaN,
+        avg: Number.NaN,
+      }
+    if (m.kind !== 'damage') {
+      const amount = Number(evalNode(m.data.value, base0) ?? 0)
+      return {
+        ...common,
+        attack: 'skill',
+        element: char.element,
+        formula: '',
+        nonCrit: amount,
+        crit: amount,
+        avg: amount,
+      }
+    }
+    // the hit's own bonuses (e.g. Ganyu A1: Frostflake CRIT Rate) apply to this row only
+    const own = Object.entries(m.data).flatMap(([path, node]): Buff[] => {
+      const b = path.startsWith('premod.') && buffOf(path.slice(7))
+      const v = b ? Number(evalNode(node, base0) ?? 0) : 0
+      return b && v ? [{ key: b.key, on: b.on, value: b.sign ? -v : v, source: m.label }] : []
+    })
+    const p = own.length ? panelOf(panel.base, [...panel.buffs, ...own]) : panel
+    const r = reader(p, m.data)
+    const b = p.buffs
+    const attack = MOVE[String(evalNode(m.data['hit.move'], r))] ?? 'normal'
+    let element = (evalNode(m.data['hit.ele'], r) as Element | undefined) ?? 'physical'
+    if (build.infusion && element === 'physical' && attack !== 'skill' && attack !== 'burst')
+      element = char.element
+    let base = Number(evalNode(m.data['hit.base'], r) ?? 0)
+    base += sum(b, 'flat') + sum(b, 'flat', attack) + sum(b, 'flat', element)
+
+    let amp = 1
+    let reaction: Reaction | undefined
+    // GO marks hits that cannot trigger a reaction with an empty hit.reaction
+    const canReact = !m.data['hit.reaction'] || evalNode(m.data['hit.reaction'], r) !== ''
+    if (ampEntry && canReact && element === char.element) {
+      reaction = ampEntry.reaction
+      const em = p.em
+      if (reaction === 'aggravate' || reaction === 'spread') {
+        base +=
+          levelMult(charLevel) *
+          ampEntry.mult *
+          (1 + (5 * em) / (em + 1200) + sum(b, 'react', reaction))
+      } else {
+        amp = ampEntry.mult * (1 + (2.78 * em) / (em + 1400) + sum(b, 'react', reaction))
+      }
+    }
+    const dmg = 1 + sum(b, 'dmg') + sum(b, 'dmg', element) + sum(b, 'dmg', attack)
+    const def = defMult(
+      charLevel,
+      build.enemyLevel,
+      sum(b, 'defShred'),
+      sum(b, 'defIgnore') + sum(b, 'defIgnore', attack),
+    )
+    const res = resMult(build.enemyRes - sum(b, 'res', element))
+    const cr = Math.min(Math.max(p.cr + sum(b, 'cr', element) + sum(b, 'cr', attack), 0), 1)
+    const cd = cr === 0 ? 0 : p.cd + sum(b, 'cd', element) + sum(b, 'cd', attack)
+    const nonCrit = base * dmg * def * res * amp
+    return {
+      ...common,
+      attack,
+      element,
+      formula: formulaText(m.data['hit.base'], r),
+      reaction,
+      nonCrit,
+      crit: nonCrit * (1 + cd),
+      avg: nonCrit * (1 + cr * cd),
+    }
+  })
 }
 
 /** Transformative reactions the character can trigger: no DEF, no crit. Swirl is listed per swirled element. */
@@ -442,12 +516,12 @@ export function calculate(
   sets: ArtifactSetData[],
   build: Build,
 ) {
-  const { buffs, passives, infusion } = collectBuffs(char, weapon, sets, build)
+  const { buffs, passives, read } = collectBuffs(char, weapon, sets, build)
   const panel = buildPanel(char, weapon, buffs, build)
   return {
     panel,
     passives,
-    rows: calcRows(char, panel, { ...build, infusion: build.infusion || infusion }),
+    rows: calcRows(char, panel, build, read),
     transformative: calcTransformative(char, panel, build),
   }
 }

@@ -6,7 +6,14 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { keepPath, type GoLabel, type GoNode, type GoSheet } from '../src/engine/passives'
+import {
+  keepPath,
+  type GoLabel,
+  type GoMove,
+  type GoNode,
+  type GoSheet,
+  type GoText,
+} from '../src/engine/passives'
 
 const [GO, OUT] = [
   resolve(process.argv[2] ?? 'go'),
@@ -38,8 +45,11 @@ const reads = (n: GoNode, out: Set<string>) => {
 const helper = (p: string) => /^(teamBuff\.)?(tally|nonStacking)\./.test(p)
 const isCond = (x?: GoNode) => x?.operation === 'read' && x.path![0] === 'conditional'
 
-/** keep only what the evaluator reads; GO's ascension / weapon substat reads are genshin-db's job */
-function prune(data: Record<string, unknown>): GoSheet {
+/**
+ * Keep only what the evaluator reads; GO's ascension / weapon substat reads are genshin-db's job.
+ * `rows` are the character's damage-row formulas, which may read helper paths and toggles too.
+ */
+function prune(data: Record<string, unknown>, rows: GoNode[] = []): GoSheet {
   const nodes: Record<string, GoNode> = {}
   const conds: Record<string, Set<string>> = {}
   const visit = (obj: unknown, prefix: string) => {
@@ -63,15 +73,19 @@ function prune(data: Record<string, unknown>): GoSheet {
   // helper paths (tally, nonStacking) only matter when a stat node reads them, e.g. lunar-only ones don't
   const needed = new Set<string>()
   const queue = Object.keys(nodes).filter((p) => !helper(p))
+  const follow = (n: GoNode) => {
+    for (const r of reads(n, new Set()))
+      for (const q of [r, `teamBuff.${r}`]) if (nodes[q] && !needed.has(q)) queue.push(q)
+  }
+  rows.forEach(follow)
   while (queue.length) {
     const p = queue.pop()!
     if (needed.has(p)) continue
     needed.add(p)
-    for (const r of reads(nodes[p], new Set()))
-      for (const q of [r, `teamBuff.${r}`]) if (nodes[q] && !needed.has(q)) queue.push(q)
+    follow(nodes[p])
   }
   for (const p of Object.keys(nodes)) if (!needed.has(p)) delete nodes[p]
-  for (const n of Object.values(nodes))
+  for (const n of [...Object.values(nodes), ...rows])
     for (const r of reads(n, new Set()))
       if (r.startsWith('conditional.')) conds[r.slice(12)] ??= new Set()
   // a toggle's states are the strings it is compared against (match) or looked up by (lookup)
@@ -88,7 +102,7 @@ function prune(data: Record<string, unknown>): GoSheet {
     n.operands.forEach(states)
     for (const t of Object.values(n.table ?? {})) states(t)
   }
-  Object.values(nodes).forEach(states)
+  for (const n of [...Object.values(nodes), ...rows]) states(n)
   return {
     nodes,
     // a toggle without states is only compared against other toggles (e.g. "same as the absorbed element")
@@ -105,6 +119,8 @@ const consts = await import(join(GO, 'libs/gi/consts/src/index.ts'))
 // GO's own React and i18n instance, so its <Translate> label elements render exactly as on its site
 const { renderToStaticMarkup } = await import(join(GO, 'node_modules/react-dom/server.js'))
 const { i18n } = await import(join(GO, 'libs/gi/i18n/src/index.ts'))
+// field names live in a registry keyed by the node's info path (see infoMut in libs/gi/wr)
+const { infoManager } = await import(join(GO, 'libs/gi/wr/src/index.ts'))
 const LANGS = { en: 'en', zh: 'chs' } as const
 for (const lng of Object.values(LANGS))
   for (const lib of ['common/localization', 'gi/localization', 'gi/dm-localization']) {
@@ -179,13 +195,109 @@ async function labels(sheet: unknown, conds: GoSheet['conds']) {
   return out
 }
 
-async function collect(keys: string[], get: (k: string) => { data: Record<string, unknown> }) {
+type Field = {
+  node?: GoNode & { data?: object; info?: { path?: string; variant?: string } }
+  text?: unknown
+}
+type CharSheet = {
+  data: { display: Record<string, unknown> }
+  sheet: Record<
+    string,
+    { sections?: { fields?: Field[]; states?: Record<string, { fields?: Field[] }> }[] }
+  >
+}
+
+function moveKind(n: NonNullable<Field['node']>): GoMove['kind'] | null {
+  if (n.operation === 'data' && n.operands[0]?.path?.join('.') === 'hit.dmg') return 'damage'
+  if (/^(lunar|stellar)/.test(n.info?.variant ?? '')) return 'lunar'
+  // GO's customHealNode / customShieldNode: heals add total.healInc, shields scale by total.shield_
+  const r = reads(n, new Set())
+  return r.has('total.healInc') ? 'heal' : r.has('total.shield_') ? 'shield' : null
+}
+const flatten = (o: object, prefix = ''): Record<string, GoNode> =>
+  Object.fromEntries(
+    Object.entries(o).flatMap(([k, v]) =>
+      (v as GoNode)?.operation
+        ? [[prefix + k, slim(v as GoNode)]]
+        : v && typeof v === 'object'
+          ? Object.entries(flatten(v, `${prefix}${k}.`))
+          : [],
+    ),
+  )
+
+/** the damage / heal / shield fields of a character sheet, with their (unrendered) names */
+function moveFields(cs: CharSheet) {
+  const where = new Map<object, string>()
+  const index = (o: Record<string, unknown>, p: string) => {
+    for (const [k, v] of Object.entries(o ?? {}))
+      if ((v as GoNode)?.operation) where.set(v as object, p + k)
+      else if (v && typeof v === 'object') index(v as Record<string, unknown>, `${p}${k}.`)
+  }
+  index(cs.data.display, '')
+  const out: { move: GoMove; label: unknown; suffix?: string }[] = []
+  const seen = new Set<string>()
+  for (const [talent, t] of Object.entries(cs.sheet))
+    for (const s of t?.sections ?? [])
+      for (const f of [
+        ...(s.fields ?? []),
+        ...Object.values(s.states ?? {}).flatMap((st) => st?.fields ?? []),
+      ]) {
+        const n = f?.node
+        const id = n && where.get(n)
+        if (!n || !id || seen.has(id) || /^(basic|reaction)\./.test(id)) continue
+        const kind = moveKind(n)
+        if (!kind) continue
+        seen.add(id)
+        const data =
+          kind === 'damage' ? flatten(n.data ?? {}) : kind === 'lunar' ? {} : { value: slim(n) }
+        const info = n.info?.path ? infoManager[n.info.path] : undefined
+        out.push({
+          move: { id, talent, kind, name: {}, data },
+          label: info?.name ?? f.text,
+          suffix: info?.textSuffix,
+        })
+      }
+  return out
+}
+
+/** talent names from GO's datamined text (char_<key>_gen.json) */
+function talentNames(key: string) {
+  const out: Record<string, GoText> = {}
+  for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
+    const f = join(GO, 'libs/gi/dm-localization/assets/locales', lng, `char_${key}_gen.json`)
+    if (!existsSync(f)) continue
+    for (const [k, v] of Object.entries(JSON.parse(readFileSync(f, 'utf8'))))
+      if ((v as { name?: string })?.name) (out[k] ??= {})[lang] = (v as { name: string }).name
+  }
+  return out
+}
+
+async function collect(
+  keys: string[],
+  get: (k: string) => { data: Record<string, unknown> },
+  isChar = false,
+) {
   const out: Record<string, GoSheet> = {}
   for (const k of keys) {
     const sheet = get(k)
-    const s = prune(sheet.data)
-    if (!Object.keys(s.nodes).length) continue
+    const moves = isChar ? moveFields(sheet as unknown as CharSheet) : []
+    const s = prune(
+      sheet.data,
+      moves.flatMap((m) => Object.values(m.move.data)),
+    )
+    if (!Object.keys(s.nodes).length && !moves.length) continue
     if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds)
+    if (moves.length) {
+      for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
+        await i18n.changeLanguage(lng)
+        for (const m of moves) {
+          const name = text(m.label)
+          m.move.name[lang] = name && m.suffix ? `${name} ${m.suffix}` : name
+        }
+      }
+      s.moves = moves.map((m) => m.move)
+      s.talents = talentNames(k)
+    }
     out[k] = s
   }
   return out
@@ -194,7 +306,7 @@ const sha = execFileSync('git', ['-C', GO, 'rev-parse', 'HEAD']).toString().trim
 const out = {
   source: `https://github.com/frzyc/genshin-optimizer/tree/${sha}`,
   license: readFileSync(join(GO, 'LICENSE'), 'utf8'),
-  chars: await collect(consts.allCharacterKeys, (k) => sheets.getCharSheet(k, 'F')),
+  chars: await collect(consts.allCharacterKeys, (k) => sheets.getCharSheet(k, 'F'), true),
   weapons: await collect(consts.allWeaponKeys, (k) => sheets.getWeaponSheet(k)),
   sets: await collect(consts.allArtifactSetKeys, (k) => sheets.getArtSheet(k)),
 }
