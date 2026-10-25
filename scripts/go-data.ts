@@ -44,6 +44,7 @@ const reads = (n: GoNode, out: Set<string>) => {
 
 // tally (element / region counts) is read by other members' and resonance formulas, so it always stays
 const helper = (p: string) => /^(teamBuff\.)?nonStacking\./.test(p);
+const ALWAYS: GoNode = { operation: "const", operands: [], value: 1 };
 const isCond = (x?: GoNode) => x?.operation === "read" && x.path![0] === "conditional";
 
 /**
@@ -117,6 +118,7 @@ function prune(data: Record<string, unknown>, rows: GoNode[] = []): GoSheet {
 
 const sheets = await import(join(GO, "libs/gi/sheets/src/index.ts"));
 const consts = await import(join(GO, "libs/gi/consts/src/index.ts"));
+const { getCharStat } = await import(join(GO, "libs/gi/stats/src/index.ts"));
 // GO's own React and i18n instance, so its <Translate> label elements render exactly as on its site
 const { renderToStaticMarkup } = await import(join(GO, "node_modules/react-dom/server.js"));
 const { i18n } = await import(join(GO, "libs/gi/i18n/src/index.ts"));
@@ -156,23 +158,26 @@ type Doc = {
   states?: Record<string, { name?: unknown }>;
   name?: unknown;
   value?: GoNode;
-  /** character sheets: the talent section the toggle sits in (passive1, constellation2, ...) */
-  section?: string;
+  header?: { title?: unknown };
+  canShow?: GoNode;
+  /** GO's heading for the toggle: its talent, weapon passive, set or effect */
+  owner?: unknown;
 };
 /** every conditional field in a sheet's UI description: { path: [sheet, cond], name, states } */
 function condDocs(root: unknown) {
   const out: Doc[] = [];
   const seen = new Set<unknown>();
-  const walk = (o: unknown, section?: string) => {
+  // a toggle's own header (GO's condTem / weapon / set templates), else the talent it is listed under
+  const walk = (o: unknown, talent?: unknown) => {
     if (!o || typeof o !== "object" || seen.has(o) || "$$typeof" in o || "operation" in o) return;
     seen.add(o);
     const d = o as Doc;
     if (Array.isArray(d.path) && d.states && d.value?.operation === "read")
-      out.push({ ...d, section });
-    for (const v of Array.isArray(o) ? o : Object.values(o)) walk(v, section);
+      out.push({ ...d, owner: d.header?.title ?? talent });
+    for (const v of Array.isArray(o) ? o : Object.values(o)) walk(v, talent);
   };
-  const talents = (root as { sheet?: Record<string, unknown> }).sheet;
-  if (talents) for (const [k, v] of Object.entries(talents)) walk(v, k);
+  const talents = (root as Partial<CharSheet>).sheet;
+  if (talents) for (const t of Object.values(talents)) walk(t, t?.name);
   walk(root);
   return out;
 }
@@ -192,13 +197,24 @@ const text = (el: unknown): string | undefined => {
     .trim();
   return words || undefined;
 };
-/** GO falls back to English where its Chinese translation is missing; so do we, unless a game name fits */
-const untranslated = (zh?: string, en?: string) => !zh || (zh === en && /[A-Za-z]{3}/.test(zh));
+type Translated = { props?: { ns?: string; key18?: string; children?: unknown } };
+/** the <Translate> keys in a GO label element: "sheet:activeCharField", ... */
+const keys18 = (el: unknown): [string, string][] => {
+  const p = (el as Translated)?.props;
+  if (!p) return [];
+  return p.ns && p.key18 ? [[p.ns, p.key18]] : [p.children].flat().flatMap(keys18);
+};
+/** GO shows English where a key has no Chinese text */
+const lacksZh = (el: unknown) =>
+  keys18(el).some(([ns, k]) => i18n.getResource(LANGS.zh, ns, k) === undefined);
+/** GO's shared "inside the ability's field" labels, which never say whose field */
+const FIELD_KEYS = new Set(["sheet:activeCharField", "sheet:opponentsField"]);
+const isFieldLabel = (el: unknown) => keys18(el).some(([ns, k]) => FIELD_KEYS.has(`${ns}:${k}`));
 
 async function labels(
   sheet: unknown,
   conds: GoSheet["conds"],
-  sectionName: (s?: string) => GoText,
+  talents: Record<string, GoText> = {},
   extra: Doc[] = [],
 ) {
   const docs = [...condDocs(sheet), ...extra].filter(
@@ -207,16 +223,11 @@ async function labels(
   const out: GoSheet["labels"] = { en: {}, zh: {} };
   for (const [lang, lng] of Object.entries(LANGS) as [keyof typeof LANGS, string][]) {
     await i18n.changeLanguage(lng);
-    // GO's shared "inside the ability's field" labels never say whose field: name the talent / passive
-    const fieldLabels = new Set(
-      ["activeCharField", "opponentsField"].map((k) => i18n.t(`sheet:${k}`)),
-    );
     for (const d of docs) {
       const id = (d.path as string[]).join(".");
-      const name = text(d.name);
-      const label: GoLabel = {
-        name: (name && fieldLabels.has(name) && sectionName(d.section)[lang]) || name,
-      };
+      // a label that doesn't say whose (or, in Chinese, that GO only has in English) takes GO's heading
+      const generic = isFieldLabel(d.name) || (lang === "zh" && lacksZh(d.name));
+      const label: GoLabel = { name: (generic && text(d.owner)) || text(d.name) };
       const states = Object.fromEntries(
         Object.entries(d.states!).flatMap(([k, v]) => {
           const t = text(v?.name);
@@ -226,13 +237,6 @@ async function labels(
       if (Object.keys(states).length) label.states = states;
       out[lang][id] ??= label;
     }
-  }
-  // no Chinese label in GO: name the toggle after its talent / weapon passive / set, from game text
-  for (const d of docs) {
-    const id = (d.path as string[]).join(".");
-    const zh = out.zh[id];
-    if (zh && untranslated(zh.name, out.en[id]?.name))
-      zh.name = sectionName(d.section).zh ?? zh.name;
   }
   // no label at all: GO's ids say where the toggle comes from ("c6Lunarbloom" = C6, "a4…" = second
   // ascension passive); name it after that constellation / passive, plus the reaction it names
@@ -251,7 +255,7 @@ async function labels(
     const reaction = m[2]?.toLowerCase();
     for (const lang of ["en", "zh"] as const) {
       const name = [
-        sectionName(section)[lang],
+        talents[section]?.[lang],
         LUNAR_NAMES[reaction ?? ""]?.[lang] ?? reactionText(reaction)[lang],
       ]
         .filter(Boolean)
@@ -276,7 +280,10 @@ type CharSheet = {
   data: { display: Record<string, unknown> };
   sheet: Record<
     string,
-    { sections?: { fields?: Field[]; states?: Record<string, { fields?: Field[] }> }[] }
+    {
+      name?: unknown;
+      sections?: { fields?: Field[]; states?: Record<string, { fields?: Field[] }> }[];
+    }
   >;
 };
 
@@ -389,14 +396,15 @@ const LUNAR_NAMES: Record<string, GoText> = {
 const reactionName = (v: string): GoText =>
   LUNAR_NAMES[v] ?? both((l) => locale(l, "sheet_gen").reaction?.[v]);
 
-/** talent names from GO's datamined text (char_<key>_gen.json) */
-function talentNames(key: string) {
+/** talent names as GO's sheet shows them (auto, skill, ..., constellation6) */
+async function talentNames(cs: CharSheet) {
   const out: Record<string, GoText> = {};
   for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
-    const f = join(GO, "libs/gi/dm-localization/assets/locales", lng, `char_${key}_gen.json`);
-    if (!existsSync(f)) continue;
-    for (const [k, v] of Object.entries(JSON.parse(readFileSync(f, "utf8"))))
-      if ((v as { name?: string })?.name) (out[k] ??= {})[lang] = (v as { name: string }).name;
+    await i18n.changeLanguage(lng);
+    for (const [k, t] of Object.entries(cs.sheet)) {
+      const name = text(t?.name);
+      if (name) (out[k] ??= {})[lang] = name;
+    }
   }
   return out;
 }
@@ -415,21 +423,21 @@ async function collect(
       moves.flatMap((m) => Object.values(m.move.data)),
     );
     if (!Object.keys(s.nodes).length && !moves.length) continue;
-    const talents = kind === "char" ? talentNames(k) : {};
-    const sectionName = (section?: string): GoText =>
-      kind === "char"
-        ? (talents[section ?? ""] ?? {})
-        : kind === "weapon"
-          ? both((l) => locale(l, `weapon_${k}_gen`).passiveName)
-          : both((l) => locale(l, `artifact_${k}_gen`).setName);
-    // GO adds the Moonsign toggle to non-Moonsign characters from its resonance sheet, labelled only
-    // "after using skill or burst": name it after the effect (Ascendant Gleam) instead
-    const moonsign: Doc[] = [];
-    if (`${k}.moonsignAfterSkillBurst` in s.conds) {
-      const d = sheets.MoonsignConditionalSection(k, sheet);
-      moonsign.push({ ...d, name: d.header.title });
+    const talents = kind === "char" ? await talentNames(sheet as unknown as CharSheet) : {};
+    // GO's team page lists Moonsign's toggle (Ascendant Gleam) with every non-Nod-Krai character
+    // and shows it while its canShow holds; we list it with the resonance, named after that heading
+    const team: Doc[] =
+      kind === "char" && getCharStat(k).region !== "nodKrai"
+        ? [sheets.MoonsignConditionalSection(k, sheet)].map((d: Doc) => ({
+            ...d,
+            name: d.header?.title,
+          }))
+        : [];
+    for (const d of team) {
+      const id = (d.path as string[]).join(".");
+      if (id in s.conds) (s.teamToggles ??= {})[id] = d.canShow ? slim(d.canShow) : ALWAYS;
     }
-    if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds, sectionName, moonsign);
+    if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds, talents, team);
     if (moves.length) {
       for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
         await i18n.changeLanguage(lng);
@@ -438,10 +446,10 @@ async function collect(
           m.move.name[lang] = name && m.suffix ? `${name} ${m.suffix}` : name;
         }
       }
-      for (const { move } of moves) {
+      for (const { move, label } of moves) {
         const section = talents[move.talent] ?? {};
         move.name.en ??= section.en;
-        if (!untranslated(move.name.zh, move.name.en)) continue;
+        if (move.name.zh && !lacksZh(label)) continue;
         // the talent's game name, plus the reaction for lunar / Stellar rows ("… · 星超导")
         const reaction =
           move.reaction && move.talent !== "reaction" && reactionName(move.reaction).zh;
@@ -469,7 +477,7 @@ async function collect(
 /** elemental resonance: team buffs of a full party, toggles labelled from GO's resonance sheets */
 async function resonance() {
   const s = prune(sheets.resonanceData);
-  s.labels = await labels(sheets.resonanceSheets, s.conds, () => ({}));
+  s.labels = await labels(sheets.resonanceSheets, s.conds);
   return s;
 }
 

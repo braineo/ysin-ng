@@ -197,6 +197,8 @@ export type Toggle = {
   states: string[];
   value: string;
   labels: { en?: GoLabel; zh?: GoLabel };
+  /** listed with the team's resonance while this holds (GO's canShow), not with its own sheet */
+  team?: GoNode;
 };
 /** One sheet in play (character, weapon, set) with its toggles and the buffs it adds now. */
 export type PassiveSource = { source: string; note: string; toggles: Toggle[]; buffs: Buff[] };
@@ -289,9 +291,8 @@ const toggle =
     states,
     value: conds?.[id] ?? "",
     labels: { en: sheet.labels?.en[id], zh: sheet.labels?.zh[id] },
+    team: sheet.teamToggles?.[id],
   });
-
-const isGleam = (c: Toggle) => c.id.endsWith(".moonsignAfterSkillBurst");
 
 export function collectBuffs(
   char: CharacterData,
@@ -333,27 +334,28 @@ export function collectBuffs(
     // a teammate's toggles only matter where they drive a team buff
     ...mates.flatMap((m) => sources(m.sheets, (id, sheet) => teamConds(sheet).has(id))),
   ];
-  // GO's Moonsign (Ascendant Gleam) toggle sits on every non-Moonsign member's sheet, but it is a
-  // team effect of 2+ Moonsign members: list it under resonance, one per member ("满辉 · 班尼特")
-  const gleam =
-    Number(go.read(["tally", "moonsign"])) >= 2
-      ? passives.flatMap((p) =>
-          p.toggles.filter(isGleam).map((c) => ({
-            ...c,
-            labels: {
-              en: { name: [c.labels.en?.name, p.source].filter(Boolean).join(" · ") },
-              zh: { name: [c.labels.zh?.name, p.source].filter(Boolean).join(" · ") },
-            },
-          })),
-        )
-      : [];
+  // a member's team-page toggles (Moonsign's Ascendant Gleam) go with the resonance, one per member
+  // ("满辉 · 班尼特"), shown as GO does
+  const teamPage = passives.flatMap((p) =>
+    p.toggles
+      .filter((c) => c.team && evalNode(c.team, go.read))
+      .map((c) => ({
+        ...c,
+        labels: {
+          en: { name: [c.labels.en?.name, p.source].filter(Boolean).join(" · ") },
+          zh: { name: [c.labels.zh?.name, p.source].filter(Boolean).join(" · ") },
+        },
+      })),
+  );
   const rest = passives
-    .map((p) => ({ ...p, toggles: p.toggles.filter((c) => !isGleam(c)) }))
-    .filter((p, i) => p.toggles.length || p.buffs.length || !passives[i].toggles.some(isGleam));
+    .map((p) => ({ ...p, toggles: p.toggles.filter((c) => !c.team) }))
+    .filter(
+      (p, i) => p.toggles.length || p.buffs.length || !passives[i].toggles.some((c) => c.team),
+    );
   const res = rest.find((p) => p.source === char.resonance?.name);
-  if (res) res.toggles.push(...gleam);
-  else if (gleam.length)
-    rest.push({ source: char.resonance?.name ?? "", note: "", toggles: gleam, buffs: [] });
+  if (res) res.toggles.push(...teamPage);
+  else if (teamPage.length)
+    rest.push({ source: char.resonance?.name ?? "", note: "", toggles: teamPage, buffs: [] });
   return {
     buffs: [...own.buffs, ...go.buffs],
     passives: rest,
