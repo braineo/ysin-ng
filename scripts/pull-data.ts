@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const PIN: string = "e7fee50a4caece895d5ffee7e9917292e7bac00a"; // a go-data commit
+const PIN: string = "fe5515fdb6539f8bb8c19976d31d9c0081867112"; // a go-data commit
 const FILES = {
   "passives.json": "../src/engine/passives.gen.json",
   "data.json": "../src/server/data.gen.json",
