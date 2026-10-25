@@ -220,17 +220,26 @@ const FIELD_KEYS = new Set(["sheet:activeCharField", "sheet:opponentsField"]);
 const isFieldLabel = (el: unknown) => keys18(el).some(([ns, k]) => FIELD_KEYS.has(`${ns}:${k}`));
 
 async function labels(sheet: unknown, conds: GoSheet["conds"], extra: Doc[] = []) {
-  const docs = [...condDocs(sheet), ...extra].filter(
-    (d) => (d.path as string[]).join(".") in conds,
-  );
+  // a toggle listed twice (e.g. in two talents) keeps its first entry
+  const docs = new Map<string, Doc>();
+  for (const d of [...condDocs(sheet), ...extra]) {
+    const id = (d.path as string[]).join(".");
+    if (id in conds && !docs.has(id)) docs.set(id, d);
+  }
   const out: GoSheet["labels"] = { en: {}, zh: {} };
   for (const [lang, lng] of Object.entries(LANGS) as [keyof typeof LANGS, string][]) {
     await i18n.changeLanguage(lng);
-    for (const d of docs) {
-      const id = (d.path as string[]).join(".");
-      // a label that doesn't say whose (or, in Chinese, that GO only has in English) takes GO's heading
-      const generic = isFieldLabel(d.name) || (lang === "zh" && lacksZh(d.name));
-      const label: GoLabel = { name: (generic && text(d.owner)) || text(d.name) };
+    // GO's heading stands in for a label that doesn't say whose (the shared "inside the field" ones)
+    // or, in Chinese, one GO only has in English, where the heading has Chinese and is the sheet's only such
+    const generic = (d: Doc) =>
+      isFieldLabel(d.name) || (lang === "zh" && lacksZh(d.name) && !lacksZh(d.owner));
+    const headings = [...docs.values()].filter(generic).map((d) => text(d.owner));
+    for (const [id, d] of docs) {
+      const name = text(d.name);
+      const owner = text(d.owner);
+      const replace = generic(d) && headings.filter((h) => h === owner).length === 1;
+      // GO shows only the heading where a toggle has no label of its own
+      const label: GoLabel = { name: (!name || replace ? owner : undefined) ?? name };
       const states = Object.fromEntries(
         Object.entries(d.states!).flatMap(([k, v]) => {
           const t = text(v?.name);
@@ -238,7 +247,7 @@ async function labels(sheet: unknown, conds: GoSheet["conds"], extra: Doc[] = []
         }),
       );
       if (Object.keys(states).length) label.states = states;
-      out[lang][id] ??= label;
+      out[lang][id] = label;
     }
   }
   return out;
