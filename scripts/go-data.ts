@@ -199,14 +199,24 @@ async function labels(
   sheet: unknown,
   conds: GoSheet["conds"],
   sectionName: (s?: string) => GoText,
+  extra: Doc[] = [],
 ) {
-  const docs = condDocs(sheet).filter((d) => (d.path as string[]).join(".") in conds);
+  const docs = [...condDocs(sheet), ...extra].filter(
+    (d) => (d.path as string[]).join(".") in conds,
+  );
   const out: GoSheet["labels"] = { en: {}, zh: {} };
   for (const [lang, lng] of Object.entries(LANGS) as [keyof typeof LANGS, string][]) {
     await i18n.changeLanguage(lng);
+    // GO's shared "inside the ability's field" labels never say whose field: name the talent / passive
+    const fieldLabels = new Set(
+      ["activeCharField", "opponentsField"].map((k) => i18n.t(`sheet:${k}`)),
+    );
     for (const d of docs) {
       const id = (d.path as string[]).join(".");
-      const label: GoLabel = { name: text(d.name) };
+      const name = text(d.name);
+      const label: GoLabel = {
+        name: (name && fieldLabels.has(name) && sectionName(d.section)[lang]) || name,
+      };
       const states = Object.fromEntries(
         Object.entries(d.states!).flatMap(([k, v]) => {
           const t = text(v?.name);
@@ -412,7 +422,14 @@ async function collect(
         : kind === "weapon"
           ? both((l) => locale(l, `weapon_${k}_gen`).passiveName)
           : both((l) => locale(l, `artifact_${k}_gen`).setName);
-    if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds, sectionName);
+    // GO adds the Moonsign toggle to non-Moonsign characters from its resonance sheet, labelled only
+    // "after using skill or burst": name it after the effect (Ascendant Gleam) instead
+    const moonsign: Doc[] = [];
+    if (`${k}.moonsignAfterSkillBurst` in s.conds) {
+      const d = sheets.MoonsignConditionalSection(k, sheet);
+      moonsign.push({ ...d, name: d.header.title });
+    }
+    if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds, sectionName, moonsign);
     if (moves.length) {
       for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
         await i18n.changeLanguage(lng);

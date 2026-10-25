@@ -195,6 +195,11 @@ describe("team", () => {
   const resonance = (team: TeamMate[]) =>
     from(run({}, team), "Elemental Resonance").find((b) => b.key === "atk%")?.value;
 
+  const gleam = (team: TeamMate[]) =>
+    run({}, team)
+      .passives.flatMap((p) => p.toggles.map((c) => [p.source, c.id]))
+      .filter(([, id]) => id.endsWith(".moonsignAfterSkillBurst"));
+
   test("Bennett's burst adds his base ATK × (burst lv 12 + C1), read from his own build", () => {
     const r = run({}, [bennett]);
     const atk = from(r, "Bennett").find((b) => b.key === "atk")!.value;
@@ -213,6 +218,16 @@ describe("team", () => {
     const xiangling = mate("xiangling", "The Catch", "Emblem of Severed Fate");
     expect(resonance([bennett, xiangling, kazuha])).toBeCloseTo(0.25, 6);
     expect(resonance([bennett, kazuha])).toBeUndefined();
+  });
+
+  test("Moonsign's toggle is a resonance one, per non-Moonsign member, with 2+ Moonsign members", () => {
+    const ineffa = mate("ineffa", "Deathmatch", "Gilded Dreams");
+    const lauma = mate("lauma", "Sacrificial Fragments", "Gilded Dreams");
+    expect(gleam([bennett, ineffa, lauma])).toEqual([
+      ["Elemental Resonance", "HuTao.moonsignAfterSkillBurst"],
+      ["Elemental Resonance", "Bennett.moonsignAfterSkillBurst"],
+    ]);
+    expect(gleam([bennett, ineffa, kazuha])).toEqual([]);
   });
 
   test("two Viridescent Venerer wearers shred once", () => {

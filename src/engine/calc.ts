@@ -291,6 +291,8 @@ const toggle =
     labels: { en: sheet.labels?.en[id], zh: sheet.labels?.zh[id] },
   });
 
+const isGleam = (c: Toggle) => c.id.endsWith(".moonsignAfterSkillBurst");
+
 export function collectBuffs(
   char: CharacterData,
   weapon: WeaponData | null,
@@ -331,7 +333,33 @@ export function collectBuffs(
     // a teammate's toggles only matter where they drive a team buff
     ...mates.flatMap((m) => sources(m.sheets, (id, sheet) => teamConds(sheet).has(id))),
   ];
-  return { buffs: [...own.buffs, ...go.buffs], passives, infusion: go.infusion, read: go.read };
+  // GO's Moonsign (Ascendant Gleam) toggle sits on every non-Moonsign member's sheet, but it is a
+  // team effect of 2+ Moonsign members: list it under resonance, one per member ("满辉 · 班尼特")
+  const gleam =
+    Number(go.read(["tally", "moonsign"])) >= 2
+      ? passives.flatMap((p) =>
+          p.toggles.filter(isGleam).map((c) => ({
+            ...c,
+            labels: {
+              en: { name: [c.labels.en?.name, p.source].filter(Boolean).join(" · ") },
+              zh: { name: [c.labels.zh?.name, p.source].filter(Boolean).join(" · ") },
+            },
+          })),
+        )
+      : [];
+  const rest = passives
+    .map((p) => ({ ...p, toggles: p.toggles.filter((c) => !isGleam(c)) }))
+    .filter((p, i) => p.toggles.length || p.buffs.length || !passives[i].toggles.some(isGleam));
+  const res = rest.find((p) => p.source === char.resonance?.name);
+  if (res) res.toggles.push(...gleam);
+  else if (gleam.length)
+    rest.push({ source: char.resonance?.name ?? "", note: "", toggles: gleam, buffs: [] });
+  return {
+    buffs: [...own.buffs, ...go.buffs],
+    passives: rest,
+    infusion: go.infusion,
+    read: go.read,
+  };
 }
 
 export function buildPanel(
