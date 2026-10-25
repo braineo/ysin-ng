@@ -76,9 +76,12 @@ Transformative = LevelMult × coef × (1 + 16·EM/(EM+2000) + bonus) × RES
 
 Everything game-specific: base stats by level, talent rows (damage, heal, shield) and their per-hit bonuses, character
 passives and constellations, weapon passives, artifact set effects, toggle labels, names and texts in English and
-Chinese, icon file names and game ids. Toggles start off, as in GO. Where GO has no Chinese label yet, the toggle or row
-takes the Chinese game name of its talent, weapon passive or set. Teammates' own stats ignore buffs from the other
-teammates.
+Chinese, icon file names and game ids. Toggles start off, as in GO. A toggle takes the heading GO shows above it (its
+talent, weapon passive, set or effect) where its own label is empty, is GO's generic "inside the ability's field", or,
+in Chinese, exists only in English; it does so only where no other such toggle of that sheet shares the heading (and, in
+Chinese, only where the heading has Chinese), else GO's own text stays. Damage rows without a Chinese name take their
+talent's. Moonsign's Ascendant Gleam toggles are listed with the elemental resonance, one per non-Nod-Krai member, while
+GO shows them (2+ Moonsign members). Teammates' own stats ignore buffs from the other teammates.
 
 Lunar (Lunar-Charged, Lunar-Bloom, Lunar-Crystallize) and Stellar Glimmer (Stellar-Conduct, Stellar Swirl) DMG use GO's
 own formula, evaluated per hit mode: `(mult × [stat] × reactionMult × (1 + 6·EM/(EM+2000) + bonus) × (1 + base DMG

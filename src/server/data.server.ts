@@ -109,7 +109,12 @@ export const character = memo((key: string): CharacterData | null => {
       label: text(name, lang) || m.id,
       group: talentName(m.talent),
     })),
-    passives: go && { nodes: go.nodes, conds: go.conds, labels: go.labels },
+    passives: go && {
+      nodes: go.nodes,
+      conds: go.conds,
+      labels: go.labels,
+      teamToggles: go.teamToggles,
+    },
     resonance: SHEETS.resonance && { name: text(RESONANCE, lang), sheet: SHEETS.resonance },
   };
 });

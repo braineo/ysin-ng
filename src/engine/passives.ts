@@ -34,6 +34,8 @@ export type GoSheet = {
   nodes: Record<string, GoNode>;
   conds: Record<string, string[]>;
   labels?: { en: Record<string, GoLabel>; zh: Record<string, GoLabel> };
+  /** toggles GO lists on its team page's resonance (Moonsign), shown while the node holds (GO's canShow) */
+  teamToggles?: Record<string, GoNode>;
   /** characters only */
   moves?: GoMove[];
   talents?: Record<string, GoText>;
