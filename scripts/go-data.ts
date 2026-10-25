@@ -155,7 +155,7 @@ const both = (get: (lng: string) => unknown): GoText => ({
 
 type Doc = {
   path?: unknown;
-  states?: Record<string, { name?: unknown }>;
+  states?: Record<string, { name?: unknown; path?: unknown; value?: GoNode }>;
   name?: unknown;
   value?: GoNode;
   header?: { title?: unknown };
@@ -163,7 +163,10 @@ type Doc = {
   /** GO's heading for the toggle: its talent, weapon passive, set or effect */
   owner?: unknown;
 };
-/** every conditional field in a sheet's UI description: { path: [sheet, cond], name, states } */
+/**
+ * every toggle in a sheet's UI description: { path: [sheet, cond], name, states }. GO's "exclusive"
+ * conditionals are one toggle with named states; its "multiple" ones make each state its own toggle.
+ */
 function condDocs(root: unknown) {
   const out: Doc[] = [];
   const seen = new Set<unknown>();
@@ -172,8 +175,13 @@ function condDocs(root: unknown) {
     if (!o || typeof o !== "object" || seen.has(o) || "$$typeof" in o || "operation" in o) return;
     seen.add(o);
     const d = o as Doc;
+    const owner = d.header?.title ?? talent;
     if (Array.isArray(d.path) && d.states && d.value?.operation === "read")
-      out.push({ ...d, owner: d.header?.title ?? talent });
+      out.push({ ...d, owner });
+    else
+      for (const st of Object.values(d.states ?? {}))
+        if (Array.isArray(st?.path) && st.value?.operation === "read")
+          out.push({ path: st.path, value: st.value, name: st.name, states: {}, owner });
     for (const v of Array.isArray(o) ? o : Object.values(o)) walk(v, talent);
   };
   const talents = (root as Partial<CharSheet>).sheet;
@@ -211,12 +219,7 @@ const lacksZh = (el: unknown) =>
 const FIELD_KEYS = new Set(["sheet:activeCharField", "sheet:opponentsField"]);
 const isFieldLabel = (el: unknown) => keys18(el).some(([ns, k]) => FIELD_KEYS.has(`${ns}:${k}`));
 
-async function labels(
-  sheet: unknown,
-  conds: GoSheet["conds"],
-  talents: Record<string, GoText> = {},
-  extra: Doc[] = [],
-) {
+async function labels(sheet: unknown, conds: GoSheet["conds"], extra: Doc[] = []) {
   const docs = [...condDocs(sheet), ...extra].filter(
     (d) => (d.path as string[]).join(".") in conds,
   );
@@ -238,36 +241,8 @@ async function labels(
       out[lang][id] ??= label;
     }
   }
-  // no label at all: GO's ids say where the toggle comes from ("c6Lunarbloom" = C6, "a4…" = second
-  // ascension passive); name it after that constellation / passive, plus the reaction it names
-  for (const id of Object.keys(conds)) {
-    if (out.en[id]?.name) continue;
-    const cond = id.slice(id.indexOf(".") + 1);
-    const m = cond.match(/^(c\d|a[14])(\w*)$/i);
-    const section =
-      m &&
-      (m[1][0].toLowerCase() === "c"
-        ? `constellation${m[1][1]}`
-        : m[1] === "a1"
-          ? "passive1"
-          : "passive2");
-    if (!section) continue;
-    const reaction = m[2]?.toLowerCase();
-    for (const lang of ["en", "zh"] as const) {
-      const name = [
-        talents[section]?.[lang],
-        LUNAR_NAMES[reaction ?? ""]?.[lang] ?? reactionText(reaction)[lang],
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      if (name) out[lang][id] = { ...out[lang][id], name };
-    }
-  }
   return out;
 }
-
-const reactionText = (r?: string): GoText =>
-  r ? both((l) => locale(l, "sheet_gen").reaction?.[r]) : {};
 
 type Field = {
   node?: GoNode & {
@@ -437,7 +412,7 @@ async function collect(
       const id = (d.path as string[]).join(".");
       if (id in s.conds) (s.teamToggles ??= {})[id] = d.canShow ? slim(d.canShow) : ALWAYS;
     }
-    if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds, talents, team);
+    if (Object.keys(s.conds).length) s.labels = await labels(sheet, s.conds, team);
     if (moves.length) {
       for (const [lang, lng] of Object.entries(LANGS) as [keyof GoText, string][]) {
         await i18n.changeLanguage(lng);
